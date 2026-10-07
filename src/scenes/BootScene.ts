@@ -8,7 +8,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
-    this.add.text(width / 2, height / 2 - 40, 'TITLE GOES HERE', {
+    this.add.text(width / 2, height / 2 - 40, 'LOOK PROTOTYPE', {
       fontFamily: 'monospace', fontSize: '48px', color: hex(C.gold),
     }).setOrigin(0.5);
     this.add.text(width / 2, height / 2 + 30, 'click / tap to start', {
