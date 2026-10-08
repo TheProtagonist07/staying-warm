@@ -6,54 +6,78 @@ export const HERO_W = 16, HERO_H = 19;
 export const HERO_SCALE = 2;
 
 const PAL: Record<string, string> = {
-  W: '#f2efe6', // fur
-  w: '#b4b3cb', // fur in shadow
-  D: '#171a2c', // face
-  E: '#c9ecff', // eyes
-  O: '#e8742a', // scarf
-  o: '#a84a1a', // scarf in shadow
+  F: '#f0883a', // fur
+  f: '#b8561f', // fur in shadow
+  C: '#fff1d6', // cream muzzle, belly and tail
+  K: '#2a1a16', // eyes and nose
+  Y: '#ffe9a8', // glowing tail tip
 };
 
-// Head and body, facing right. 16 columns x 16 rows. Legs and scarf tail are added per frame.
+// A fox kit, facing right: head and body only. 16 columns x 16 rows.
+// Legs and the tail are added per frame so they can move.
 const BODY = [
-  '...W........W...',
-  '..WWW......WWW..',
-  '..WWWWWWWWWWWW..',
-  '.WWWWWWWWWWWWWW.',
-  '.WWWWDDDDDDDDWW.',
-  '.WWWDDDDDDDDDDW.',
-  '.WWWDDEEDDDEEDW.',
-  '.WWWDDEEDDDEEDW.',
-  '.WWWDDDDDDDDDDW.',
-  '.wWWWDDDDDDDDWW.',
-  '..wWWWWWWWWWWW..',
-  '..oOOOOOOOOOOO..',
-  '...wWWWWWWWWW...',
-  '...wWWWWWWWWW...',
-  '...wwWWWWWWWW...',
-  '....wwWWWWWW....',
+  '....F.......F...',
+  '...FFF.....FFF..',
+  '...FfFFFFFFFfF..',
+  '..FFFFFFFFFFFFF.',
+  '..FFFFFFFFFFFFF.',
+  '..FFFKFFFFFKFFF.',
+  '..FFFKFFFFFKFFF.',
+  '..FFFCCCCCCCFFF.',
+  '..CCCCCCKKCCCCC.',
+  '...CCCCCCCCCCC..',
+  '....CCCCCCCCC...',
+  '....FFFFFFFF....',
+  '...fFFCCCCFFF...',
+  '...fFFCCCCFFF...',
+  '...ffFCCCCFFF...',
+  '....ffFFFFFF....',
 ];
 
+type Px = [x: number, y: number, c: 'F' | 'f' | 'C' | 'Y'];
+
 interface Frame {
-  dy: number;                          // whole body shifted down (+) or up (-): the bob / stretch
-  legs: [x: number, top: number, bottom: number][];   // 2px-wide legs, rows in cell space
-  tail: [x: number, y: number, c: 'O' | 'o'][];       // scarf tail pixels, rows in BODY space
+  dy: number;                                        // whole body shifted down (+) or up (-): the bob / stretch
+  legs: [x: number, top: number, bottom: number][];  // 2px-wide legs, rows in cell space
+  tail: Px[];                                        // tail pixels, rows in BODY space
   blink?: boolean;
 }
 
 const LEGS_STAND: Frame['legs'] = [[5, 17, 18], [9, 17, 18]];
-const TAIL_REST: Frame['tail'] = [[1, 11, 'O'], [0, 12, 'o']];
+
+// The tail carries the light: orange base, cream band, glowing tip.
+const TAIL_UP: Px[] = [ // curled up behind the back (standing)
+  [2, 14, 'f'], [2, 13, 'F'], [1, 14, 'f'], [1, 13, 'F'], [1, 12, 'F'], [0, 13, 'f'],
+  [0, 12, 'F'], [0, 11, 'F'], [1, 11, 'F'], [0, 10, 'C'], [1, 10, 'C'], [0, 9, 'Y'],
+];
+const TAIL_SWAY: Px[] = [ // same curl, tip tilted back a little
+  [2, 14, 'f'], [2, 13, 'F'], [1, 14, 'f'], [1, 13, 'F'], [1, 12, 'F'], [0, 13, 'f'],
+  [0, 12, 'F'], [0, 11, 'C'], [1, 11, 'F'], [0, 10, 'Y'],
+];
+const TAIL_BACK_HI: Px[] = [ // streaming behind while running
+  [2, 14, 'f'], [2, 13, 'F'], [1, 13, 'F'], [1, 12, 'F'], [0, 12, 'C'], [0, 11, 'C'], [0, 10, 'Y'],
+];
+const TAIL_BACK_LO: Px[] = [
+  [2, 14, 'f'], [2, 13, 'F'], [1, 14, 'f'], [1, 13, 'F'], [0, 13, 'C'], [0, 12, 'C'], [0, 11, 'Y'],
+];
+const TAIL_DOWN: Px[] = [ // trails below on the way up
+  [2, 13, 'F'], [2, 14, 'F'], [1, 14, 'F'], [1, 15, 'F'], [1, 16, 'f'], [0, 15, 'C'], [0, 16, 'C'], [0, 17, 'Y'],
+];
+const TAIL_FLY: Px[] = [ // whips up on the way down
+  [2, 13, 'F'], [2, 12, 'F'], [1, 12, 'F'], [1, 11, 'F'], [0, 11, 'f'], [1, 10, 'F'],
+  [0, 10, 'F'], [0, 9, 'C'], [1, 9, 'C'], [0, 8, 'Y'],
+];
 
 const FRAMES: Frame[] = [
-  /* 0 idle       */ { dy: 0, legs: LEGS_STAND, tail: TAIL_REST },
-  /* 1 idle (dip) */ { dy: 1, legs: [[5, 18, 18], [9, 18, 18]], tail: TAIL_REST },
-  /* 2 blink      */ { dy: 0, legs: LEGS_STAND, tail: TAIL_REST, blink: true },
-  /* 3 run a      */ { dy: 0, legs: [[3, 17, 17], [10, 17, 18]], tail: [[1, 11, 'O'], [0, 10, 'o']] },
-  /* 4 run b      */ { dy: 1, legs: [[6, 18, 18], [8, 18, 18]], tail: [[1, 10, 'O'], [0, 10, 'o']] },
-  /* 5 run c      */ { dy: 0, legs: [[4, 17, 18], [11, 17, 17]], tail: [[1, 11, 'O'], [0, 12, 'o']] },
-  /* 6 run d      */ { dy: 1, legs: [[6, 18, 18], [8, 18, 18]], tail: [[1, 10, 'O'], [0, 11, 'o']] },
-  /* 7 jump       */ { dy: -1, legs: [[5, 16, 17], [9, 16, 17]], tail: [[1, 12, 'O'], [1, 13, 'O'], [0, 14, 'o']] },
-  /* 8 fall       */ { dy: 0, legs: [[4, 17, 18], [10, 17, 18]], tail: [[1, 10, 'O'], [0, 9, 'O'], [0, 8, 'o']] },
+  /* 0 idle       */ { dy: 0, legs: LEGS_STAND, tail: TAIL_UP },
+  /* 1 idle (dip) */ { dy: 1, legs: [[5, 18, 18], [9, 18, 18]], tail: TAIL_SWAY },
+  /* 2 blink      */ { dy: 0, legs: LEGS_STAND, tail: TAIL_UP, blink: true },
+  /* 3 run a      */ { dy: 0, legs: [[3, 17, 17], [10, 17, 18]], tail: TAIL_BACK_HI },
+  /* 4 run b      */ { dy: 1, legs: [[6, 18, 18], [8, 18, 18]], tail: TAIL_BACK_LO },
+  /* 5 run c      */ { dy: 0, legs: [[4, 17, 18], [11, 17, 17]], tail: TAIL_BACK_HI },
+  /* 6 run d      */ { dy: 1, legs: [[6, 18, 18], [8, 18, 18]], tail: TAIL_BACK_LO },
+  /* 7 jump       */ { dy: -1, legs: [[5, 16, 17], [9, 16, 17]], tail: TAIL_DOWN },
+  /* 8 fall       */ { dy: 0, legs: [[4, 17, 18], [10, 17, 18]], tail: TAIL_FLY },
 ];
 
 function drawFrame(ctx: CanvasRenderingContext2D, ox: number, f: Frame): void {
@@ -65,12 +89,12 @@ function drawFrame(ctx: CanvasRenderingContext2D, ox: number, f: Frame): void {
   BODY.forEach((row, y) => {
     [...row].forEach((c, x) => {
       if (c === '.') return;
-      if (c === 'E' && f.blink && y === 6) c = 'D'; // half-closed eyes
+      if (c === 'K' && f.blink && y === 5) c = 'F'; // half-closed eyes
       px(x, y + top, c);
     });
   });
   for (const [x, a, b] of f.legs) {
-    for (let y = a; y <= b; y++) { px(x, y, 'w'); px(x + 1, y, 'W'); }
+    for (let y = a; y <= b; y++) { px(x, y, 'f'); px(x + 1, y, 'F'); }
   }
   for (const [x, y, c] of f.tail) px(x, y + top, c);
 }

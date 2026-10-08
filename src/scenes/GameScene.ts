@@ -137,10 +137,10 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.solids);
     // halo sits behind the sprite so it lights the air around the hero without washing out the pixels
     this.playerGlow = this.add.image(0, 0, 'glow').setScale(1.1).setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xcfdcff).setAlpha(0.4).setDepth(19);
-    // a faint second glow on top keeps the hero the brightest thing on screen, even in dark corners
-    this.heroShine = this.add.image(0, 0, 'glow').setScale(0.45).setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xcfdcff).setAlpha(0.22).setDepth(21);
+      .setTint(0xffd9a8).setAlpha(0.32).setDepth(19);
+    // the fox's tail tip is its lantern: a small warm glow that follows the tip
+    this.heroShine = this.add.image(0, 0, 'glow').setScale(0.4).setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xffe9a8).setAlpha(0.6).setDepth(21);
   }
 
 
@@ -275,8 +275,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.hero.setPosition(this.player.x, this.player.y + 13);
-    this.heroShine.setPosition(this.player.x, this.player.y - 6);
-    this.playerGlow.setPosition(this.player.x, this.player.y - 4).setAlpha(0.4 + Math.sin(time * 0.004) * 0.05);
+    // tail tip sits behind the fox and moves with the pose: low on the way up, high on the way down
+    const pose = this.hero.anims.currentAnim?.key;
+    const tipY = pose === 'hero-jump' ? -3 : pose === 'hero-fall' ? -21 : -17;
+    this.heroShine.setPosition(this.hero.x + (this.hero.flipX ? 14 : -14), this.hero.y + tipY)
+      .setAlpha(0.55 + Math.sin(time * 0.006) * 0.1);
+    this.playerGlow.setPosition(this.player.x, this.player.y - 4).setAlpha(0.32 + Math.sin(time * 0.004) * 0.04);
 
     if (this.player.y > H + 120) this.respawn();
   }
