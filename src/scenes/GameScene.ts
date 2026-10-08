@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   makeForeground, makeFog, makeGlow, makeGrain, makeMidground, makeSky, makeSkyline, makeVignette, rng,
 } from '../lib/atmosphere';
+import { HERO_SCALE, makeHero } from '../lib/hero';
 import { sfx } from '../lib/sfx';
 import { CHECKPOINT, EXIT, LAMPS, ORBS, PLATFORMS, SPAWN, WORLD_W } from '../level';
 
@@ -13,7 +14,10 @@ export class GameScene extends Phaser.Scene {
   private solids!: Phaser.Physics.Arcade.StaticGroup;
   private player!: Phaser.GameObjects.Rectangle;
   private body!: Phaser.Physics.Arcade.Body;
+  private hero!: Phaser.GameObjects.Sprite;
+  private wasGrounded = true;
   private playerGlow!: Phaser.GameObjects.Image;
+  private heroShine!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private lamps: { glow: Phaser.GameObjects.Image; phase: number }[] = [];
   private tinted: (Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite)[] = [];
@@ -120,13 +124,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildPlayer(): void {
-    this.player = this.add.rectangle(SPAWN.x, SPAWN.y, 14, 20, 0xf2f6ff).setDepth(20);
+    // The physics box is an invisible rectangle; the drawn character just follows it.
+    // That keeps collisions stable while the sprite is free to squash, stretch and flip.
+    this.player = this.add.rectangle(SPAWN.x, SPAWN.y, 14, 26, 0xf2f6ff).setVisible(false);
     this.physics.add.existing(this.player);
+    makeHero(this);
+    this.hero = this.add.sprite(SPAWN.x, SPAWN.y, 'hero', 0).setOrigin(0.5, 1).setScale(HERO_SCALE).setDepth(20);
+    this.hero.play('hero-idle');
+    this.wasGrounded = true;
     this.body = this.player.body as Phaser.Physics.Arcade.Body;
     this.body.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.solids);
-    this.playerGlow = this.add.image(0, 0, 'glow').setScale(1.0).setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xcfdcff).setAlpha(0.55).setDepth(21);
+    // halo sits behind the sprite so it lights the air around the hero without washing out the pixels
+    this.playerGlow = this.add.image(0, 0, 'glow').setScale(1.1).setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xcfdcff).setAlpha(0.4).setDepth(19);
+    // a faint second glow on top keeps the hero the brightest thing on screen, even in dark corners
+    this.heroShine = this.add.image(0, 0, 'glow').setScale(0.45).setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xcfdcff).setAlpha(0.22).setDepth(21);
   }
 
 
@@ -189,6 +203,7 @@ export class GameScene extends Phaser.Scene {
 
   private win(): void {
     this.won = true;
+    this.hero.play('hero-idle', true);
     this.body.setVelocity(0, 0);
     this.body.setAllowGravity(false);
     const secs = (this.elapsed / 1000).toFixed(1);
@@ -259,7 +274,9 @@ export class GameScene extends Phaser.Scene {
       if (d.s.x < -5) d.s.x = W + 5; else if (d.s.x > W + 5) d.s.x = -5;
     }
 
-    this.playerGlow.setPosition(this.player.x, this.player.y).setAlpha(0.55 + Math.sin(time * 0.004) * 0.05);
+    this.hero.setPosition(this.player.x, this.player.y + 13);
+    this.heroShine.setPosition(this.player.x, this.player.y - 6);
+    this.playerGlow.setPosition(this.player.x, this.player.y - 4).setAlpha(0.4 + Math.sin(time * 0.004) * 0.05);
 
     if (this.player.y > H + 120) this.respawn();
   }
@@ -281,6 +298,7 @@ export class GameScene extends Phaser.Scene {
     if (this.buffer > 0 && this.coyote > 0) {
       this.body.setVelocityY(-470);
       this.buffer = 0; this.coyote = 0; this.jumpCut = false;
+      this.squash(0.8, 1.2); // stretch tall on take-off
       sfx.pickup();
     }
     // release early = shorter hop
@@ -288,6 +306,23 @@ export class GameScene extends Phaser.Scene {
       this.body.setVelocityY(this.body.velocity.y * 0.5);
       this.jumpCut = true;
     }
+    this.animate(dir, grounded);
+  }
+
+  /** Picks the animation from what the body is doing, and faces the way we're moving. */
+  private animate(dir: number, grounded: boolean): void {
+    if (dir !== 0) this.hero.setFlipX(dir < 0);
+    const key = !grounded ? (this.body.velocity.y < 0 ? 'hero-jump' : 'hero-fall')
+      : Math.abs(this.body.velocity.x) > 25 ? 'hero-run' : 'hero-idle';
+    this.hero.play(key, true);
+    if (grounded && !this.wasGrounded) this.squash(1.2, 0.8); // squash wide on landing
+    this.wasGrounded = grounded;
+  }
+
+  private squash(sx: number, sy: number): void {
+    this.tweens.killTweensOf(this.hero);
+    this.hero.setScale(HERO_SCALE * sx, HERO_SCALE * sy);
+    this.tweens.add({ targets: this.hero, scaleX: HERO_SCALE, scaleY: HERO_SCALE, duration: 160, ease: 'Quad.easeOut' });
   }
 
   private respawn(): void {

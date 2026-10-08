@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { makeHero } from '../lib/hero';
 import { C, hex } from '../lib/palette';
 import { sfx } from '../lib/sfx';
 
@@ -8,6 +9,8 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
+    makeHero(this);
+    this.add.sprite(width / 2, height / 2 - 90, 'hero', 0).setOrigin(0.5, 1).setScale(8).play('hero-idle');
     this.add.text(width / 2, height / 2 - 40, 'LOOK PROTOTYPE', {
       fontFamily: 'monospace', fontSize: '48px', color: hex(C.gold),
     }).setOrigin(0.5);
