@@ -1,3 +1,5 @@
+import type { PropKind } from './lib/environment';
+
 // Level data, kept separate from game logic so changing a level never touches code paths.
 // Platforms: [x, topY, width]; blocks extend below the screen. Gaps are <=80px so every jump is makeable.
 export const WORLD_W = 2880;
@@ -18,3 +20,17 @@ export const ORBS: [number, number][] = [[330, 400], [835, 388], [1300, 448], [1
 export const CHECKPOINT = { x: 1560, topY: 430 };
 // Keep the door clear of the foreground pillars' resting position at the end of the room.
 export const EXIT = { x: 2720, topY: 470 };
+
+// Decoration only, no collision: [kind, x]. Each prop stands on whatever platform is under its x.
+export const PROPS: [kind: PropKind, x: number][] = [
+  ['sign', 130], ['mushroom', 250], ['tree1', 420], ['pile1', 472],
+  ['mushroom', 640], ['mushroom', 870], ['tree2', 1010], ['pile2', 1060],
+  ['tree3', 1270], ['pile1', 1400], ['mushroom', 1600], ['tree1', 1760],
+  ['tree2', 2020], ['pile2', 2190], ['tree3', 2380], ['mushroom', 2600], ['tree1', 2830],
+];
+
+/** Top of the highest platform under x, or null over a pit. */
+export function groundAt(x: number): number | null {
+  const tops = PLATFORMS.filter(([px, , w]) => x >= px && x <= px + w).map(([, top]) => top);
+  return tops.length ? Math.min(...tops) : null;
+}

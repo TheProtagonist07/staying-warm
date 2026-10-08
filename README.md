@@ -8,4 +8,4 @@ Rules to respect: new work only, no AI-generated images/sound (art is drawn in c
 
 ## Practice game (pre-jam rehearsal, not the submission)
 
-Collect all 6 light orbs, then reach the door. A/D or arrows to move, Space/W/Z to jump, C cycles the light colour, R restarts after winning. Level data lives in `src/level.ts`; the look generators are in `src/lib/atmosphere.ts`. The real jam entry gets designed after the limitation is announced.
+Collect all 6 light orbs, then reach the door. A/D or arrows to move, Space/W/Z to jump, C cycles the light colour, R restarts after winning. Level data and prop placement live in `src/level.ts`. Art is all drawn from code: lighting and scenery layers in `src/lib/atmosphere.ts`, the fox in `src/lib/hero.ts`, ground tiles, props and trees in `src/lib/environment.ts` (sheet: `docs/assets.jpg`). The real jam entry gets designed after the limitation is announced.
