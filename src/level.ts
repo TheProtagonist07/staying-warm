@@ -1,3 +1,4 @@
+import type { FoeKind } from './lib/creatures';
 import type { PropKind } from './lib/environment';
 
 // Level data, kept separate from game logic so changing a level never touches code paths.
@@ -29,6 +30,20 @@ export const PROPS: [kind: PropKind, x: number][] = [
   ['tree2', 2020], ['pumpkin', 2165], ['pile2', 2215], ['tree3', 2380], ['pumpkin', 2460],
   ['mushroom', 2600], ['pile1', 2670], ['tree1', 2830], ['fence', 2850],
 ];
+
+// Enemies: [kind, x, range, y]. Ground enemies patrol x - range .. x + range on the platform
+// under x. The bat weaves around (x, y). The spider hangs at (x, y) and drops to the ground.
+export const FOES: [kind: FoeKind, x: number, range: number, y?: number][] = [
+  ['gloom', 400, 40],          // first one, on flat ground well away from the pit: a safe place to learn the stomp
+  ['gloom', 995, 80],
+  ['hedgehog', 1320, 70],      // walks through an orb, so that orb has to be timed; stops short of the landing spot
+  ['spider', 1745, 0, 300],    // hangs from the tree
+  ['bat', 2100, 90, 330],      // guards the gap
+];
+
+// The owl perches on the signpost. The mote waits here until the fox finds it.
+export const OWL = { x: 130 };
+export const MOTE_HOME = { x: 232, y: 428 }; // low enough that walking past picks it up
 
 /** Top of the highest platform under x, or null over a pit. */
 export function groundAt(x: number): number | null {

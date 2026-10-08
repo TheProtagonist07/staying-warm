@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import {
   makeForeground, makeFog, makeGlow, makeGrain, makeMidground, makeSky, makeSkyline, makeVignette, rng,
 } from '../lib/atmosphere';
+import { makeCharacters } from '../lib/characters';
+import { Creatures } from '../lib/creatures';
 import { makeEnvironment } from '../lib/environment';
 import { Fx } from '../lib/fx';
 import { HERO_SCALE, makeHero } from '../lib/hero';
@@ -25,6 +27,12 @@ export class GameScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private fx!: Fx;
   private life!: Life;
+  private creatures!: Creatures;
+  private orbsLeft: { x: number; y: number }[] = [];
+  private hearts = 3;
+  private heartImgs: Phaser.GameObjects.Image[] = [];
+  private invuln = 0; // ms of safety after being hurt
+  private stun = 0;   // ms without control while knocked back
   private justLanded = false;
   private stepT = 0;
   private trailT = 0;
@@ -58,6 +66,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.tinted = []; this.dust = []; this.leaves = []; this.clouds = []; this.lastScrollX = 0;
     this.spawn = { ...SPAWN }; this.orbsGot = 0; this.won = false; this.elapsed = 0;
+    this.orbsLeft = ORBS.map(([x, y]) => ({ x, y })); this.hearts = 3; this.invuln = 0; this.stun = 0;
     if (!this.textures.exists('grain')) this.buildTextures(); // survive scene.restart()
     this.buildBackdrop();
     this.buildLevel();
@@ -65,9 +74,12 @@ export class GameScene extends Phaser.Scene {
     this.buildPickups();
     this.fx = new Fx(this);
     this.life = new Life(this, this.fx);
+    this.creatures = new Creatures(this, this.fx);
     this.buildAtmosphere();
     this.hud = this.add.text(20, 18, '', { fontFamily: 'monospace', fontSize: '16px', color: '#9db8ff' })
       .setScrollFactor(0).setDepth(60);
+    this.heartImgs = [0, 1, 2].map((i) => this.add.image(28 + i * 20, 52, 'heart', 0).setScale(PX)
+      .setScrollFactor(0).setDepth(60));
 
     this.cameras.main.setBounds(0, 0, WORLD_W, H).startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.fadeIn(600, 0, 0, 0);
@@ -89,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     // the scenery layers are drawn smooth, then chunked into pixels to match the hero and tiles
     for (const key of ['far', 'mid', 'near']) pixelate(this, key);
     makeEnvironment(this);
+    makeCharacters(this);
     makeFog(this, 'fog', 512, 220);
     makeGlow(this, 'glow', 256);
     makeGlow(this, 'dust', 10);
@@ -177,6 +190,8 @@ export class GameScene extends Phaser.Scene {
       for (const part of core.getData('parts') as Phaser.GameObjects.Image[]) part.destroy();
       core.destroy();
       this.orbsGot++;
+      this.orbsLeft = this.orbsLeft.filter((o) => o.x !== core.x);
+      this.creatures.celebrate();
       this.fx.sparks(core.x, core.y, 12, 0x9db8ff);
       sfx.pickup();
       if (this.orbsGot === ORBS.length) this.openDoor();
@@ -337,6 +352,20 @@ export class GameScene extends Phaser.Scene {
       x: this.player.x, y: this.player.y, feet: this.body.bottom, vx, grounded, landed: this.justLanded,
     });
     this.justLanded = false;
+    // enemies, the companion and the owl
+    if (this.invuln > 0) this.invuln -= dt;
+    this.hero.setAlpha(this.invuln > 0 && Math.floor(time / 70) % 2 ? 0.35 : 1); // blink while safe
+    const hit = this.won ? null : this.creatures.update(time, dt, {
+      x: this.player.x, y: this.player.y, feet: this.body.bottom, vx, vy: this.body.velocity.y, grounded,
+    }, this.orbsLeft);
+    if (hit?.type === 'stomp') {
+      this.body.setVelocityY(-390); // bounce off its head
+      this.jumpCut = true;          // a bounce is always full height, whether or not jump is held
+      this.squash(0.8, 1.2);
+    } else if (hit?.type === 'hurt' && this.invuln <= 0) {
+      this.hurt(hit.fromX);
+    }
+
     const hud = `orbs ${this.orbsGot}/${ORBS.length}   lanterns ${this.life.lanternsLit}/${this.life.lanternCount}`;
     if (this.hud.text !== hud) this.hud.setText(hud);
 
@@ -349,6 +378,12 @@ export class GameScene extends Phaser.Scene {
     const jumpKey = k.SPACE.isDown || k.W.isDown || k.UP.isDown || k.Z.isDown;
     const jumpPressed = [k.SPACE, k.W, k.UP, k.Z].some((key) => Phaser.Input.Keyboard.JustDown(key));
     const grounded = this.body.blocked.down || this.body.touching.down;
+
+    if (this.stun > 0) { // knocked back: no control until it wears off
+      this.stun -= dt;
+      this.animate(0, grounded);
+      return;
+    }
 
     // coyote time + jump buffer: forgiveness windows that make jumping feel fair
     this.coyote = grounded ? 110 : this.coyote - dt;
@@ -393,7 +428,27 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this.hero, scaleX: HERO_SCALE, scaleY: HERO_SCALE, duration: 160, ease: 'Quad.easeOut' });
   }
 
+  /** Lose a heart, get thrown back from whatever did it, and be safe for a moment. */
+  private hurt(fromX: number): void {
+    this.setHearts(this.hearts - 1);
+    if (this.hearts <= 0) { this.respawn(); return; }
+    this.invuln = 1300;
+    this.stun = 260;
+    this.body.setVelocity((this.player.x >= fromX ? 1 : -1) * 230, -290);
+    this.cameras.main.shake(120, 0.006);
+    this.fx.sparks(this.player.x, this.player.y, 8, 0xff5a6a);
+    sfx.hit();
+  }
+
+  private setHearts(n: number): void {
+    this.hearts = n;
+    this.heartImgs.forEach((img, i) => img.setFrame(i < n ? 0 : 1));
+  }
+
   private respawn(): void {
+    this.setHearts(3);
+    this.invuln = 1000;
+    this.stun = 0;
     this.body.reset(this.spawn.x, this.spawn.y);
     this.cameras.main.fadeIn(400, 0, 0, 0);
     sfx.hit();
