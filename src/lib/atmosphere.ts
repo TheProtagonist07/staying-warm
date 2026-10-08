@@ -165,9 +165,9 @@ export function makeForeground(scene: Phaser.Scene, key: string, w: number, h: n
     g.fillRect(x, 0, 3, len);
     g.fillRect(x - 3, len - 6, 9, 10);
   }
-  // two thick pillars at the edges of the frame
-  g.fillRect(w * 0.06, 0, 46, h);
-  g.fillRect(w * 0.7, 0, 34, h);
+  // two pillars; kept thin so they only hide gameplay for a moment as they slide past
+  g.fillRect(w * 0.06, 0, 30, h);
+  g.fillRect(w * 0.7, 0, 22, h);
   g.generateTexture(key, w, h);
   g.destroy();
 }

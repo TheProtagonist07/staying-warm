@@ -3,19 +3,12 @@ import {
   makeForeground, makeFog, makeGlow, makeGrain, makeMidground, makeSky, makeSkyline, makeVignette, rng,
 } from '../lib/atmosphere';
 import { sfx } from '../lib/sfx';
+import { CHECKPOINT, EXIT, LAMPS, ORBS, PLATFORMS, SPAWN, WORLD_W } from '../level';
 
 const W = 960, H = 540;
-const WORLD_W = 2880;
 const ACCENTS = [0x4a6bff, 0xff4a3a, 0xff9a3c]; // blue, red, orange; press C to cycle
 
-// [x, topY, width] — blocks extend below the screen. Gaps are <=80px so every jump is makeable.
-const PLATFORMS: [number, number, number][] = [
-  [0, 470, 520], [600, 470, 500], [780, 410, 110], [1180, 470, 260], [1520, 430, 300],
-  [1900, 390, 160], [2140, 430, 120], [2340, 470, 540], [2420, 410, 80], [2500, 350, 140],
-];
-const LAMPS: [number, number][] = [[260, 250], [820, 230], [1320, 260], [1700, 240], [2250, 250], [2650, 230]];
-
-// Look prototype: one long room that shows the whole style (layers, light, fog, grain).
+// Practice game on the look prototype: collect every light orb, then reach the door.
 export class GameScene extends Phaser.Scene {
   private solids!: Phaser.Physics.Arcade.StaticGroup;
   private player!: Phaser.GameObjects.Rectangle;
@@ -25,6 +18,13 @@ export class GameScene extends Phaser.Scene {
   private lamps: { glow: Phaser.GameObjects.Image; phase: number }[] = [];
   private tinted: (Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite)[] = [];
   private accent = 0;
+  private spawn = { ...SPAWN };
+  private orbsGot = 0;
+  private won = false;
+  private elapsed = 0;
+  private hud!: Phaser.GameObjects.Text;
+  private door!: Phaser.GameObjects.Rectangle;
+  private doorGlow!: Phaser.GameObjects.Image;
   private coyote = 0;
   private buffer = 0;
   private jumpCut = false;
@@ -40,18 +40,24 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.lamps = []; this.tinted = []; this.dust = [];
-    this.buildTextures();
+    this.spawn = { ...SPAWN }; this.orbsGot = 0; this.won = false; this.elapsed = 0;
+    if (!this.textures.exists('grain')) this.buildTextures(); // survive scene.restart()
     this.buildBackdrop();
     this.buildLevel();
     this.buildPlayer();
+    this.buildPickups();
     this.buildAtmosphere();
+    this.hud = this.add.text(20, 18, '', { fontFamily: 'monospace', fontSize: '16px', color: '#9db8ff' })
+      .setScrollFactor(0).setDepth(60);
+    this.updateHud();
 
     this.cameras.main.setBounds(0, 0, WORLD_W, H).startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.fadeIn(600, 0, 0, 0);
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,C') as typeof this.keys;
+    this.keys.R = this.input.keyboard!.addKey('R');
     this.keys.C.on('down', () => this.setAccent((this.accent + 1) % ACCENTS.length));
 
-    const hint = this.add.text(W / 2, H - 28, 'A / D move   Space jump   C change light', {
+    const hint = this.add.text(W / 2, H - 28, 'A / D move   Space jump   collect every orb, then reach the door   C light', {
       fontFamily: 'monospace', fontSize: '14px', color: '#6f7fae',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(60);
     this.tweens.add({ targets: hint, alpha: 0, delay: 6000, duration: 1500 });
@@ -114,13 +120,84 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildPlayer(): void {
-    this.player = this.add.rectangle(60, 400, 14, 20, 0xf2f6ff).setDepth(20);
+    this.player = this.add.rectangle(SPAWN.x, SPAWN.y, 14, 20, 0xf2f6ff).setDepth(20);
     this.physics.add.existing(this.player);
     this.body = this.player.body as Phaser.Physics.Arcade.Body;
     this.body.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.solids);
-    this.playerGlow = this.add.image(0, 0, 'glow').setScale(1.3).setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xcfdcff).setAlpha(0.75).setDepth(21);
+    this.playerGlow = this.add.image(0, 0, 'glow').setScale(1.0).setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xcfdcff).setAlpha(0.55).setDepth(21);
+  }
+
+
+  private buildPickups(): void {
+    // orbs: small bright core + additive glow, bobbing gently
+    const orbs = this.physics.add.staticGroup();
+    for (const [x, y] of ORBS) {
+      const core = this.add.rectangle(x, y, 8, 8, 0xffffff).setDepth(14).setAngle(45);
+      const glow = this.add.image(x, y, 'glow').setScale(0.6).setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(0x9db8ff).setDepth(14).setAlpha(0.8);
+      this.tweens.add({ targets: [core, glow], y: y - 6, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      core.setData('glow', glow);
+      orbs.add(core);
+      // pickup box is much bigger than the 8px sprite: near misses should count
+      (core.body as Phaser.Physics.Arcade.StaticBody).setSize(24, 24);
+    }
+    this.physics.add.overlap(this.player, orbs, (_p, o) => {
+      const core = o as Phaser.GameObjects.Rectangle;
+      (core.getData('glow') as Phaser.GameObjects.Image).destroy();
+      core.destroy();
+      this.orbsGot++;
+      sfx.pickup();
+      this.updateHud();
+      if (this.orbsGot === ORBS.length) this.openDoor();
+    });
+
+    // checkpoint beacon: dim until touched, then lights up
+    const cp = this.add.rectangle(CHECKPOINT.x, CHECKPOINT.topY - 14, 4, 28, 0x2a3a66).setDepth(12);
+    const cpGlow = this.add.image(CHECKPOINT.x, CHECKPOINT.topY - 30, 'glow').setScale(0.7)
+      .setBlendMode(Phaser.BlendModes.ADD).setTint(0xffd27a).setDepth(13).setAlpha(0);
+    this.physics.add.existing(cp, true);
+    this.physics.add.overlap(this.player, cp, () => {
+      if (this.spawn.x === CHECKPOINT.x) return;
+      this.spawn = { x: CHECKPOINT.x, y: CHECKPOINT.topY - 40 };
+      cp.setFillStyle(0xffd27a);
+      this.tweens.add({ targets: cpGlow, alpha: 0.7, duration: 400 });
+      sfx.win();
+    });
+
+    // exit door: closed (dark) until every orb is collected
+    this.door = this.add.rectangle(EXIT.x, EXIT.topY - 30, 34, 60, 0x0b1022).setDepth(12)
+      .setStrokeStyle(2, 0x4a6099);
+    this.doorGlow = this.add.image(EXIT.x, EXIT.topY - 30, 'glow').setScale(1.4)
+      .setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe9b0).setDepth(13).setAlpha(0);
+    this.physics.add.existing(this.door, true);
+    this.physics.add.overlap(this.player, this.door, () => {
+      if (this.orbsGot === ORBS.length && !this.won) this.win();
+    });
+  }
+
+  private openDoor(): void {
+    this.door.setFillStyle(0xffe9b0).setStrokeStyle(2, 0xffffff);
+    this.tweens.add({ targets: this.doorGlow, alpha: 0.85, duration: 600 });
+    sfx.win();
+  }
+
+  private updateHud(): void {
+    this.hud.setText(`orbs ${this.orbsGot}/${ORBS.length}`);
+  }
+
+  private win(): void {
+    this.won = true;
+    this.body.setVelocity(0, 0);
+    this.body.setAllowGravity(false);
+    const secs = (this.elapsed / 1000).toFixed(1);
+    this.add.rectangle(0, 0, W, H, 0x000000, 0.6).setOrigin(0, 0).setScrollFactor(0).setDepth(70);
+    this.add.text(W / 2, H / 2 - 20, 'LIGHT RESTORED', { fontFamily: 'monospace', fontSize: '44px', color: '#ffe9b0' })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(71);
+    this.add.text(W / 2, H / 2 + 34, `${secs}s   press R to play again`, { fontFamily: 'monospace', fontSize: '18px', color: '#9db8ff' })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(71);
+    sfx.win();
   }
 
   private buildAtmosphere(): void {
@@ -128,7 +205,7 @@ export class GameScene extends Phaser.Scene {
     this.fogFront = this.add.tileSprite(0, 330, W, 220, 'fog').setOrigin(0, 0).setScrollFactor(0).setDepth(31).setAlpha(0.07);
     this.tinted.push(this.fogFront);
     this.add.image(0, 0, 'vignette').setOrigin(0, 0).setScrollFactor(0).setDepth(50);
-    this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setScrollFactor(0).setDepth(51).setAlpha(0.9);
+    this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setScrollFactor(0).setDepth(51).setAlpha(0.4);
 
     // floating dust motes catching the light
     const r = rng(33);
@@ -137,19 +214,24 @@ export class GameScene extends Phaser.Scene {
         .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.15 + r() * 0.35).setScale(0.4 + r() * 0.6);
       this.dust.push({ s, vx: (r() - 0.5) * 6, vy: -2 - r() * 6 });
     }
-    this.setAccent(0);
+    this.setAccent(0, true);
   }
 
-  private setAccent(i: number): void {
+  private setAccent(i: number, silent = false): void {
     this.accent = i;
     const c = ACCENTS[i]!;
     const dim = Phaser.Display.Color.ValueToColor(c).darken(55).color;
     for (const o of this.tinted) o.setTint(o instanceof Phaser.GameObjects.TileSprite ? dim : c);
-    sfx.pickup();
+    if (!silent) sfx.pickup();
   }
 
   update(time: number, dt: number): void {
-    this.move(dt);
+    if (this.won) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.R)) this.scene.restart();
+    } else {
+      this.elapsed += dt;
+      this.move(dt);
+    }
 
     // parallax: far layers scroll slower than the camera, near layers faster
     const sx = this.cameras.main.scrollX;
@@ -177,7 +259,7 @@ export class GameScene extends Phaser.Scene {
       if (d.s.x < -5) d.s.x = W + 5; else if (d.s.x > W + 5) d.s.x = -5;
     }
 
-    this.playerGlow.setPosition(this.player.x, this.player.y).setAlpha(0.7 + Math.sin(time * 0.004) * 0.05);
+    this.playerGlow.setPosition(this.player.x, this.player.y).setAlpha(0.55 + Math.sin(time * 0.004) * 0.05);
 
     if (this.player.y > H + 120) this.respawn();
   }
@@ -209,7 +291,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private respawn(): void {
-    this.body.reset(60, 400);
+    this.body.reset(this.spawn.x, this.spawn.y);
     this.cameras.main.fadeIn(400, 0, 0, 0);
     sfx.hit();
   }
