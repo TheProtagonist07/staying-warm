@@ -3,10 +3,12 @@ import {
   makeForeground, makeFog, makeGlow, makeGrain, makeMidground, makeSky, makeSkyline, makeVignette, rng,
 } from '../lib/atmosphere';
 import { makeEnvironment } from '../lib/environment';
+import { Fx } from '../lib/fx';
 import { HERO_SCALE, makeHero } from '../lib/hero';
+import { Life } from '../lib/life';
 import { PX, pixelate } from '../lib/pixel';
 import { sfx } from '../lib/sfx';
-import { CHECKPOINT, EXIT, LAMPS, ORBS, PLATFORMS, PROPS, SPAWN, WORLD_W, groundAt } from '../level';
+import { CHECKPOINT, EXIT, ORBS, PLATFORMS, SPAWN, WORLD_W } from '../level';
 
 const W = 960, H = 540;
 const ACCENTS = [0x4a6bff, 0xff4a3a, 0xff9a3c]; // blue, red, orange; press C to cycle
@@ -21,7 +23,13 @@ export class GameScene extends Phaser.Scene {
   private playerGlow!: Phaser.GameObjects.Image;
   private heroShine!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private lamps: { glow: Phaser.GameObjects.Image; phase: number }[] = [];
+  private fx!: Fx;
+  private life!: Life;
+  private justLanded = false;
+  private stepT = 0;
+  private trailT = 0;
+  private treeline!: Phaser.GameObjects.TileSprite;
+  private clouds: { img: Phaser.GameObjects.Image; speed: number }[] = [];
   private tinted: (Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite)[] = [];
   private accent = 0;
   private spawn = { ...SPAWN };
@@ -48,17 +56,18 @@ export class GameScene extends Phaser.Scene {
   constructor() { super('Game'); }
 
   create(): void {
-    this.lamps = []; this.tinted = []; this.dust = []; this.leaves = []; this.lastScrollX = 0;
+    this.tinted = []; this.dust = []; this.leaves = []; this.clouds = []; this.lastScrollX = 0;
     this.spawn = { ...SPAWN }; this.orbsGot = 0; this.won = false; this.elapsed = 0;
     if (!this.textures.exists('grain')) this.buildTextures(); // survive scene.restart()
     this.buildBackdrop();
     this.buildLevel();
     this.buildPlayer();
     this.buildPickups();
+    this.fx = new Fx(this);
+    this.life = new Life(this, this.fx);
     this.buildAtmosphere();
     this.hud = this.add.text(20, 18, '', { fontFamily: 'monospace', fontSize: '16px', color: '#9db8ff' })
       .setScrollFactor(0).setDepth(60);
-    this.updateHud();
 
     this.cameras.main.setBounds(0, 0, WORLD_W, H).startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.fadeIn(600, 0, 0, 0);
@@ -91,11 +100,19 @@ export class GameScene extends Phaser.Scene {
     const fixed = <T extends Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.ScrollFactor>(o: T) =>
       o.setScrollFactor(0) as T;
     fixed(this.add.image(0, 0, 'sky').setOrigin(0, 0).setDepth(0));
-    // soft moonlight behind the skyline
-    const moon = this.add.image(W * 0.7, H * 0.3, 'glow').setScale(4).setTint(0x2c4a9a).setAlpha(0.22)
-      .setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
-    fixed(moon);
+    // the moon, its soft halo, and a few clouds that drift across it.
+    // It sits below the mid layer's pipes (y 86-112) so they don't draw stripes across it.
+    fixed(this.add.image(W * 0.83, 160, 'glow').setScale(4).setTint(0x2c4a9a).setAlpha(0.26)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(1));
+    fixed(this.add.image(W * 0.83, 160, 'moon').setScale(PX).setDepth(1));
+    const cr = rng(55);
+    for (let i = 0; i < 5; i++) {
+      const img = fixed(this.add.image(cr() * W, 60 + cr() * 110, i % 2 ? 'cloud1' : 'cloud2').setScale(PX)
+        .setAlpha(0.85).setDepth(1.5));
+      this.clouds.push({ img, speed: 3 + cr() * 6 });
+    }
     this.far = fixed(this.add.tileSprite(0, 0, W, H, 'far').setOrigin(0, 0).setTileScale(PX).setDepth(2));
+    this.treeline = fixed(this.add.tileSprite(0, 0, W, H, 'treeline').setOrigin(0, 0).setTileScale(PX).setDepth(2.5));
     this.fogBack = fixed(this.add.tileSprite(0, 270, W, 220, 'fog').setOrigin(0, 0).setDepth(3).setAlpha(0.16));
     this.mid = fixed(this.add.tileSprite(0, 0, W, H, 'mid').setOrigin(0, 0).setTileScale(PX).setDepth(4));
     this.tinted.push(this.fogBack);
@@ -119,32 +136,6 @@ export class GameScene extends Phaser.Scene {
     }
     this.physics.world.setBounds(0, -200, WORLD_W, H + 600);
     this.solids = solids;
-
-    // hanging lanterns: a chain, the lantern, and an additive glow pool that flickers
-    for (const [x, y] of LAMPS) {
-      this.add.rectangle(x, y / 2, 2, y, 0x1a2138).setDepth(9); // chain
-      this.add.image(x, y, 'lantern').setOrigin(0.5, 0).setScale(PX).setDepth(12);
-      const glow = this.add.image(x, y + 40, 'glow').setScale(1.9).setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(13).setTint(ACCENTS[0]).setAlpha(0.45);
-      this.lamps.push({ glow, phase: Math.random() * 10 });
-      this.tinted.push(glow);
-    }
-
-    // decoration: trees, leaf piles, mushrooms, the signpost. Behind the hero, no collision.
-    for (const [kind, x] of PROPS) {
-      const top = groundAt(x);
-      if (top === null) continue;
-      const tree = kind.startsWith('tree');
-      this.add.image(x, top + (tree ? 2 : 0), kind).setOrigin(0.5, 1).setScale(PX).setDepth(tree ? 9 : 12);
-    }
-
-    // a few small birds on ledges give the dead world a little life
-    const r = rng(21);
-    for (let i = 0; i < 6; i++) {
-      const p = PLATFORMS[Math.floor(r() * PLATFORMS.length)]!;
-      this.add.image(p[0] + 12 + r() * (p[2] - 24), p[1], 'bird').setOrigin(0.5, 1).setScale(PX)
-        .setFlipX(r() < 0.5).setDepth(12);
-    }
   }
 
   private buildPlayer(): void {
@@ -186,8 +177,8 @@ export class GameScene extends Phaser.Scene {
       for (const part of core.getData('parts') as Phaser.GameObjects.Image[]) part.destroy();
       core.destroy();
       this.orbsGot++;
+      this.fx.sparks(core.x, core.y, 12, 0x9db8ff);
       sfx.pickup();
-      this.updateHud();
       if (this.orbsGot === ORBS.length) this.openDoor();
     });
 
@@ -201,6 +192,7 @@ export class GameScene extends Phaser.Scene {
       if (this.spawn.x === CHECKPOINT.x) return;
       this.spawn = { x: CHECKPOINT.x, y: CHECKPOINT.topY - 40 };
       cpImg.setTexture('cp-on');
+      this.fx.embers(CHECKPOINT.x, CHECKPOINT.topY - 20, 10);
       this.tweens.add({ targets: cpGlow, alpha: 0.7, duration: 400 });
       sfx.win();
     });
@@ -218,12 +210,10 @@ export class GameScene extends Phaser.Scene {
 
   private openDoor(): void {
     this.doorImg.setTexture('door-open');
+    this.fx.sparks(EXIT.x, EXIT.topY - 30, 18, 0xffe9b0);
+    this.fx.embers(EXIT.x, EXIT.topY - 8, 12);
     this.tweens.add({ targets: this.doorGlow, alpha: 0.85, duration: 600 });
     sfx.win();
-  }
-
-  private updateHud(): void {
-    this.hud.setText(`orbs ${this.orbsGot}/${ORBS.length}`);
   }
 
   private win(): void {
@@ -269,6 +259,7 @@ export class GameScene extends Phaser.Scene {
     const c = ACCENTS[i]!;
     const dim = Phaser.Display.Color.ValueToColor(c).darken(55).color;
     for (const o of this.tinted) o.setTint(o instanceof Phaser.GameObjects.TileSprite ? dim : c);
+    this.life.setAccent(c);
     if (!silent) sfx.pickup();
   }
 
@@ -286,6 +277,7 @@ export class GameScene extends Phaser.Scene {
     const sx = this.cameras.main.scrollX;
     // these three layers are drawn at 1/PX size, so their scroll is divided by PX too
     this.far.tilePositionX = (sx * 0.12) / PX;
+    this.treeline.tilePositionX = (sx * 0.25) / PX;
     this.mid.tilePositionX = (sx * 0.45) / PX;
     this.near.tilePositionX = (sx * 1.4) / PX;
     this.fogBack.tilePositionX = sx * 0.3 + time * 0.012;
@@ -297,12 +289,6 @@ export class GameScene extends Phaser.Scene {
       this.grain.tilePositionY = Math.floor(Math.random() * 128);
     }
 
-    // lamp flicker: slow wobble plus the occasional hard dip
-    for (const l of this.lamps) {
-      const dip = Math.random() < 0.008 ? -0.35 : 0;
-      l.glow.setAlpha(Math.max(0.15, 0.45 + Math.sin(time * 0.003 + l.phase) * 0.05 + dip));
-    }
-
     for (const d of this.dust) {
       d.s.x += d.vx * dt * 0.001; d.s.y += d.vy * dt * 0.001;
       if (d.s.y < -5) d.s.y = H + 5;
@@ -312,6 +298,10 @@ export class GameScene extends Phaser.Scene {
     // leaves drift down with a side-to-side sway, and slide past as the camera moves
     const camShift = sx - this.lastScrollX;
     this.lastScrollX = sx;
+    for (const c of this.clouds) {
+      c.img.x -= c.speed * dt * 0.001 + camShift * 0.04;
+      if (c.img.x < -70) c.img.x += W + 140; else if (c.img.x > W + 70) c.img.x -= W + 140;
+    }
     for (const l of this.leaves) {
       l.s.y += l.vy * dt * 0.001;
       l.s.x += Math.sin(time * 0.0015 + l.phase) * 18 * dt * 0.001 - camShift * 0.9;
@@ -327,6 +317,28 @@ export class GameScene extends Phaser.Scene {
     this.heroShine.setPosition(this.hero.x + (this.hero.flipX ? 14 : -14), this.hero.y + tipY)
       .setAlpha(0.55 + Math.sin(time * 0.006) * 0.1);
     this.playerGlow.setPosition(this.player.x, this.player.y - 4).setAlpha(0.32 + Math.sin(time * 0.004) * 0.04);
+
+    // the fox's own effects: a ribbon of tail light while moving, and dust from running feet
+    const grounded = this.body.blocked.down || this.body.touching.down;
+    const vx = this.won ? 0 : this.body.velocity.x;
+    this.trailT -= dt;
+    if (this.trailT <= 0 && (Math.abs(vx) > 40 || !grounded)) {
+      this.fx.trail(this.heroShine.x, this.heroShine.y);
+      this.trailT = 45;
+    }
+    this.stepT -= dt;
+    if (this.stepT <= 0 && grounded && Math.abs(vx) > 120) {
+      this.fx.dust(this.hero.x - Math.sign(vx) * 6, this.hero.y, 1);
+      this.stepT = 170;
+    }
+
+    // everything that reacts to the fox
+    this.life.update(time, dt, {
+      x: this.player.x, y: this.player.y, feet: this.body.bottom, vx, grounded, landed: this.justLanded,
+    });
+    this.justLanded = false;
+    const hud = `orbs ${this.orbsGot}/${ORBS.length}   lanterns ${this.life.lanternsLit}/${this.life.lanternCount}`;
+    if (this.hud.text !== hud) this.hud.setText(hud);
 
     if (this.player.y > H + 120) this.respawn();
   }
@@ -349,6 +361,7 @@ export class GameScene extends Phaser.Scene {
       this.body.setVelocityY(-470);
       this.buffer = 0; this.coyote = 0; this.jumpCut = false;
       this.squash(0.8, 1.2); // stretch tall on take-off
+      this.fx.dust(this.hero.x, this.hero.y, 3);
       sfx.pickup();
     }
     // release early = shorter hop
@@ -365,7 +378,12 @@ export class GameScene extends Phaser.Scene {
     const key = !grounded ? (this.body.velocity.y < 0 ? 'hero-jump' : 'hero-fall')
       : Math.abs(this.body.velocity.x) > 25 ? 'hero-run' : 'hero-idle';
     this.hero.play(key, true);
-    if (grounded && !this.wasGrounded) this.squash(1.2, 0.8); // squash wide on landing
+    if (grounded && !this.wasGrounded) { // touchdown: squash wide, kick up dust
+      this.squash(1.2, 0.8);
+      this.fx.dust(this.hero.x, this.hero.y, 5);
+      this.justLanded = true;
+      sfx.land();
+    }
     this.wasGrounded = grounded;
   }
 

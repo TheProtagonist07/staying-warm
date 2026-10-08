@@ -226,10 +226,185 @@ function makeTree(scene: Phaser.Scene, key: string, w: number, h: number, seed: 
   });
 }
 
-/** Builds every environment texture. Call once; texture keys are listed in docs/assets.jpg. */
+const GRASS1 = [
+  '.G...g.',
+  '.G..g..',
+  '..G.g.T',
+  '..G.gG.',
+  '..GggG.',
+  '...GG..',
+  '...GG..',
+];
+const GRASS2 = [
+  'T...g',
+  '.G.g.',
+  '.G.g.',
+  '..G..',
+  '..G..',
+];
+const REED = [
+  '.B.',
+  '.B.',
+  '.B.',
+  '.g.',
+  '.g.',
+  '.g.',
+  '.g.',
+  '.g.',
+  '.g.',
+  '.g.',
+];
+const PUMPKIN = [
+  '.....S.....',
+  '....SS.....',
+  '..OOOOOOO..',
+  '.OoOOOOOoO.',
+  'OOoEOOOEoOO',
+  'OOoOOOOOoOO',
+  'OOoEEEEEoOO',
+  '.OoOOOOOoO.',
+  '..OOOOOOO..',
+];
+const FENCE = [
+  '.B.....B.....B..',
+  'BBB...BBB...BBB.',
+  'BbB...BbB...BbB.',
+  'BbBBBBBbBBBBBbB.',
+  'BbB...BbB...BbB.',
+  'BbB...BbB...BbB.',
+  'BbBBBBBbB...BbB.',
+  'BbB...BbB...BbB.',
+  'BbB...BbB...BbB.',
+];
+const BIRD_UP = [
+  'W.....W',
+  '.W...W.',
+  '..WWWo.',
+  '..WWW..',
+];
+const BIRD_DOWN = [
+  '.......',
+  '..WWWo.',
+  '.WWWWW.',
+  'W..W..W',
+];
+const SPARK = [
+  '.W.',
+  'WWW',
+  '.W.',
+];
+const PUFF = [
+  '.WW.',
+  'WWWW',
+  'WWWW',
+  '.WW.',
+];
+
+/** Second batch: things that react to the fox (grass, pumpkins, flying birds) and particle shapes. */
+function makeLiveProps(scene: Phaser.Scene): void {
+  const grass = { G: '#3d5285', g: '#2c3c66', T: '#8a7a3e', B: '#5a4030' };
+  mapTex(scene, 'grass1', GRASS1, grass);
+  mapTex(scene, 'grass2', GRASS2, grass);
+  mapTex(scene, 'reed', REED, grass);
+  mapTex(scene, 'pumpkin', PUMPKIN, { O: '#8a4318', o: '#6a3212', E: '#2a1408', S: '#2f4a3a' });
+  mapTex(scene, 'pumpkin-on', PUMPKIN, { O: '#d9762a', o: '#b8561f', E: '#ffe9a8', S: '#3d5c48' });
+  mapTex(scene, 'fence', FENCE, { B: '#3b2c26', b: '#57402f' });
+  mapTex(scene, 'bird-up', BIRD_UP, { W: '#dfe8ff', o: '#e8a33d' });
+  mapTex(scene, 'bird-down', BIRD_DOWN, { W: '#dfe8ff', o: '#e8a33d' });
+  mapTex(scene, 'lantern-off', LANTERN, { K: '#2b3660', G: '#3a4a7a', L: '#4a5c99' });
+  mapTex(scene, 'spark', SPARK, { W: '#ffffff' });
+  mapTex(scene, 'puff', PUFF, { W: '#ffffff' });
+  mapTex(scene, 'dot', ['W'], { W: '#ffffff' });
+}
+
+/** Pixel moon with a shaded edge and a few craters. */
+function makeMoon(scene: Phaser.Scene, key: string, size: number): void {
+  const c = (size - 1) / 2;
+  const craters: [number, number, number][] = [[0.36, 0.34, 0.13], [0.62, 0.52, 0.09], [0.42, 0.68, 0.07], [0.68, 0.28, 0.05]];
+  pixelTex(scene, key, size, size, (ctx) => {
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (Math.hypot(x - c, y - c) > c + 0.2) continue;
+        let col = Math.hypot(x - c * 0.8, y - c * 0.8) > c * 0.95 ? '#aebbe2' : '#d8e0f8'; // lit from the top-left
+        if (craters.some(([cx, cy, r]) => Math.hypot(x - cx * size, y - cy * size) <= r * size)) col = '#b9c5ea';
+        ctx.fillStyle = col;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+}
+
+/** Flat-bottomed cloud made of overlapping circles, lighter along the top. */
+function makeCloud(scene: Phaser.Scene, key: string, w: number, h: number, seed: number): void {
+  const r = rng(seed);
+  const blobs = Array.from({ length: 5 }, () => {
+    const rad = h * (0.35 + r() * 0.3);
+    return { x: rad + r() * (w - rad * 2), y: h - rad * (0.5 + r() * 0.5), rad };
+  });
+  const solid = (x: number, y: number) => y < h && blobs.some((b) => Math.hypot(x - b.x, y - b.y) <= b.rad);
+  pixelTex(scene, key, w, h, (ctx) => {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!solid(x, y)) continue;
+        ctx.fillStyle = solid(x, y - 1) ? '#141f45' : '#24356a';
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+}
+
+/** A distant line of tree silhouettes that tiles sideways: the forest behind the ruins. */
+function makeTreeline(scene: Phaser.Scene, key: string, w: number, h: number, seed: number): void {
+  const r = rng(seed);
+  const BASE = '#080d20', MOONLIT = '#18244a', RUST = '#2c1d1c';
+  pixelTex(scene, key, w, h, (ctx) => {
+    const put = (x: number, y: number, c: string) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(((Math.round(x) % w) + w) % w, Math.round(y), 1, 1); // wrap so the layer repeats cleanly
+    };
+    ctx.fillStyle = BASE;
+    ctx.fillRect(0, h - 24, w, 24);
+    for (let x = 0; x < w; x += 12 + r() * 24) {
+      const tall = 50 + r() * 62, rad = 8 + r() * 9;
+      for (let y = h - tall; y < h; y++) { put(x, y, BASE); put(x + 1, y, BASE); }
+      for (let i = 0; i < 4; i++) {
+        const bx = x + (r() - 0.5) * rad * 1.4, by = h - tall + (r() - 0.6) * rad, br = rad * (0.6 + r() * 0.4);
+        for (let dy = -br; dy <= br; dy++) {
+          for (let dx = -br; dx <= br; dx++) {
+            if (dx * dx + dy * dy > br * br) continue;
+            const edge = dx + dy < -br * 0.7; // the side facing the moon
+            put(bx + dx, by + dy, edge && r() < 0.3 ? (r() < 0.4 ? RUST : MOONLIT) : BASE);
+          }
+        }
+      }
+    }
+  });
+}
+
+/** Soft cone of light that hangs under a lantern. Smooth on purpose: light is not pixel art. */
+function makeShaft(scene: Phaser.Scene, key: string, w: number, h: number): void {
+  if (scene.textures.exists(key)) scene.textures.remove(key);
+  const tex = scene.textures.createCanvas(key, w, h)!;
+  const ctx = tex.getContext();
+  for (let y = 0; y < h; y++) {
+    const t = y / h;
+    const half = 6 + t * (w / 2 - 6);
+    const a = Math.pow(1 - t, 1.6);
+    const g = ctx.createLinearGradient(w / 2 - half, 0, w / 2 + half, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.5, `rgba(255,255,255,${a.toFixed(3)})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(w / 2 - half, y, half * 2, 1);
+  }
+  tex.refresh();
+}
+
+/** Builds every environment texture. Call once; the full set is pictured in docs/assets.jpg. */
 export function makeEnvironment(scene: Phaser.Scene): void {
   makeGround(scene);
   makeProps(scene);
+  makeLiveProps(scene);
   makeDoor(scene, 'door-closed', false);
   makeDoor(scene, 'door-open', true);
   makePile(scene, 'pile1', 18, 6, 41);
@@ -237,6 +412,12 @@ export function makeEnvironment(scene: Phaser.Scene): void {
   makeTree(scene, 'tree1', 64, 96, 3, 1);
   makeTree(scene, 'tree2', 64, 96, 8, 1.15);
   makeTree(scene, 'tree3', 64, 96, 12, 0.6); // nearly bare
+  makeMoon(scene, 'moon', 28);
+  makeCloud(scene, 'cloud1', 56, 16, 61);
+  makeCloud(scene, 'cloud2', 40, 12, 67);
+  makeTreeline(scene, 'treeline', 480, 270, 71);
+  makeShaft(scene, 'shaft', 128, 256);
 }
 
-export type PropKind = 'tree1' | 'tree2' | 'tree3' | 'pile1' | 'pile2' | 'mushroom' | 'sign';
+export type PropKind =
+  | 'tree1' | 'tree2' | 'tree3' | 'pile1' | 'pile2' | 'mushroom' | 'sign' | 'pumpkin' | 'fence';

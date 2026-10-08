@@ -23,10 +23,11 @@ export const EXIT = { x: 2720, topY: 470 };
 
 // Decoration only, no collision: [kind, x]. Each prop stands on whatever platform is under its x.
 export const PROPS: [kind: PropKind, x: number][] = [
-  ['sign', 130], ['mushroom', 250], ['tree1', 420], ['pile1', 472],
-  ['mushroom', 640], ['mushroom', 870], ['tree2', 1010], ['pile2', 1060],
-  ['tree3', 1270], ['pile1', 1400], ['mushroom', 1600], ['tree1', 1760],
-  ['tree2', 2020], ['pile2', 2190], ['tree3', 2380], ['mushroom', 2600], ['tree1', 2830],
+  ['fence', 32], ['sign', 130], ['pumpkin', 200], ['mushroom', 250], ['tree1', 420], ['pile1', 472],
+  ['mushroom', 640], ['pumpkin', 710], ['mushroom', 870], ['tree2', 1010], ['pile2', 1060],
+  ['tree3', 1270], ['pumpkin', 1345], ['pile1', 1400], ['mushroom', 1600], ['tree1', 1760], ['pile2', 1800],
+  ['tree2', 2020], ['pumpkin', 2165], ['pile2', 2215], ['tree3', 2380], ['pumpkin', 2460],
+  ['mushroom', 2600], ['pile1', 2670], ['tree1', 2830], ['fence', 2850],
 ];
 
 /** Top of the highest platform under x, or null over a pit. */
