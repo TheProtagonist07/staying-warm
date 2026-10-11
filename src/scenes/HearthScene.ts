@@ -26,6 +26,7 @@ export class HearthScene extends Phaser.Scene {
   private done = false;
   private started = false;
   private hearthGlow!: Phaser.GameObjects.Image;
+  private hearthFill!: Phaser.GameObjects.Image;
   private flame!: Phaser.GameObjects.Particles.ParticleEmitter;
   private bar!: Phaser.GameObjects.Graphics;
   private hint!: Phaser.GameObjects.Text;
@@ -57,6 +58,16 @@ export class HearthScene extends Phaser.Scene {
     g.fillStyle(0x434c78, 1).fillRect(W / 2 - 190, 300, 380, 30);           // hearth stone
     g.fillStyle(0x07090f, 1).fillRect(W / 2 - 110, 130, 220, 170);          // the opening
     g.lineStyle(4, 0x59699f, 1).strokeRect(W / 2 - 170, 70, 340, 250);
+    // The opening fills with warm light as the Hearth catches.
+    if (!this.textures.exists('hearth-fill')) {
+      const t = this.textures.createCanvas('hearth-fill', 220, 170)!;
+      const c = t.getContext();
+      const gr = c.createRadialGradient(110, 150, 6, 110, 150, 150);
+      gr.addColorStop(0, 'rgba(255,210,120,1)'); gr.addColorStop(0.5, 'rgba(255,130,40,0.7)'); gr.addColorStop(1, 'rgba(120,30,10,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, 220, 170);
+      t.refresh();
+    }
+    this.hearthFill = this.add.image(W / 2, 215, 'hearth-fill').setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.hearthGlow = this.add.image(W / 2, 250, 'glow').setTint(0xffa040).setBlendMode(Phaser.BlendModes.ADD).setScale(0.3).setAlpha(0.1);
     this.flame = this.add.particles(W / 2, 285, 'dot', {
       x: { min: -60, max: 60 }, lifespan: { min: 500, max: 1100 }, speedY: { min: -120, max: -40 }, speedX: { min: -14, max: 14 },
@@ -76,7 +87,7 @@ export class HearthScene extends Phaser.Scene {
       scale: { min: 1, max: 2.2 }, alpha: { min: 0.3, max: 0.7 }, frequency: 120,
     }).setDepth(8);
 
-    this.add.rectangle(0, 0, W, H, 0x8090c0).setOrigin(0, 0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(40);
+    this.add.rectangle(0, 0, W, H, 0xa090c8).setOrigin(0, 0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(40);
     this.add.image(0, 0, 'vignette').setOrigin(0, 0).setDepth(50);
     this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setDepth(51).setAlpha(0.25);
 
@@ -157,6 +168,7 @@ export class HearthScene extends Phaser.Scene {
         this.remove(f);
       } else if (near && f.kind === 'ice' && this.stun === 0) {
         this.stun = 800;
+        this.spawnI = Math.max(this.spawnI, 2600); // a breather after a hit
         this.caught = Math.max(0, this.caught - 2);
         this.burstE.setParticleTint(0xbfe8ff);
         this.burstE.emitParticleAt(f.x, f.y, 12);
@@ -171,7 +183,8 @@ export class HearthScene extends Phaser.Scene {
 
     // The Hearth fills with light as you catch embers.
     const p = this.caught / NEED;
-    this.hearthGlow.setScale(0.4 + p * 2.2).setAlpha(0.15 + p * 0.6 + Math.sin(time * 0.01) * 0.03);
+    this.hearthGlow.setScale(0.4 + p * 2.0).setAlpha(0.1 + p * 0.35 + Math.sin(time * 0.01) * 0.03);
+    this.hearthFill.setAlpha(Math.min(1, p) * (this.done ? 1 : 0.7) + Math.sin(time * 0.012) * 0.04 * p);
     this.flame.emitting = this.caught >= 3;
     this.flame.setParticleScale(3 + p * 3);
     this.bar.clear();
@@ -198,7 +211,6 @@ export class HearthScene extends Phaser.Scene {
     this.sound.play('impactBell_heavy_000', { volume: 0.7 });
     this.sound.play('pepSound2', { volume: 0.5 });
     this.flame.emitting = true;
-    this.hearthGlow.setScale(4).setAlpha(0.8);
     this.time.delayedCall(1400, () => {
       this.dialog.show(HEARTH_FINALE, () => {
         this.cameras.main.fadeOut(1400, 255, 240, 210);
