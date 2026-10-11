@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { EndScene } from './scenes/EndScene';
 import { GameScene } from './scenes/GameScene';
+import { HearthScene } from './scenes/HearthScene';
 import { TitleScene } from './scenes/TitleScene';
 
 // Fixed logical size, scaled to fit any screen. pixelArt keeps the scaled-up sprites crisp.
@@ -15,7 +16,7 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 1300 } } },
   input: { activePointers: 3 },
-  scene: [BootScene, TitleScene, GameScene, EndScene],
+  scene: [BootScene, TitleScene, GameScene, HearthScene, EndScene],
 });
 
 // Dev-only handle for poking the running game from the browser console.

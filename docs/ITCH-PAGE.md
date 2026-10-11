@@ -12,11 +12,12 @@
 
 Emberfall is freezing. The Great Hearth at the top of Mount Hollow has gone out, the lanterns along the path are dark, and you are the last apprentice lamplighter.
 
-**Staying Warm** is a short story-driven platformer in three chapters (about 10 to 15 minutes) built around one idea: you are always cold.
+**Staying Warm** is a short story-driven platformer in three chapters and a final mini game (about 12 to 17 minutes) built around one idea: you are always cold.
 - Your warmth drains as you walk, and drains fast in the cold wind.
 - Lit lanterns warm you back up and save your place.
 - Carry sparks up the mountain and light every lantern to open each chapter's door.
 - Squash the slugs, hop the spikers, wait for the bats to pass, and bounce on the red mushrooms.
+- At the summit, catch the drifting light in a short mini game to relight the Great Hearth.
 - Meet the people on the road. A few have a story to tell, and something warm to give you.
 - Seven hidden star shards sit above the route if you want a harder run.
 
@@ -32,6 +33,7 @@ Limitation "Staying Warm": warmth is the whole game. It is a resource that drain
 
 **Credits**
 - Art: "Pixel Platformer" by Kenney (CC0), kenney.nl
+- Fonts: "Kenney Pixel" and "Kenney Pixel Square" by Kenney (CC0)
 - Music: "Snow Theme" by CleytonKauffman (CC0), opengameart.org
 - Wind ambience: "Winter Wind" by gerardogc2378 (CC0), opengameart.org
 - Sound effects: "Digital Audio" and "Impact Sounds" by Kenney (CC0)

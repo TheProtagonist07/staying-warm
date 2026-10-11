@@ -15,6 +15,10 @@ Ambience
   "Winter Wind" by gerardogc2378 - CC0 1.0 (public domain)
   https://opengameart.org/content/winter-wind
 
+Fonts
+  "Kenney Pixel" and "Kenney Pixel Square" by Kenney (www.kenney.nl) - CC0 1.0 (public domain)
+  https://kenney.nl/assets/kenney-fonts
+
 Sound effects
   "Digital Audio" and "Impact Sounds" by Kenney (www.kenney.nl) - CC0 1.0 (public domain)
   https://kenney.nl/assets/digital-audio

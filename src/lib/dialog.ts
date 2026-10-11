@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { NAME_COLOR, PORTRAIT } from './story';
 import type { Line } from './story';
+import { FONT_BODY, FONT_TITLE } from './ui';
 
 const W = 960, H = 540;
 
@@ -29,11 +30,11 @@ export class Dialog {
     const panel = scene.add.rectangle(W / 2, H - 92, W - 60, 150, 0x080d1c, 0.93).setStrokeStyle(2, 0x4a5c99);
     this.portraitFrame = scene.add.rectangle(110, H - 92, 96, 96, 0x121a33).setStrokeStyle(2, 0x4a5c99);
     this.portrait = scene.add.sprite(110, H - 92, 'chars', 6).setScale(3.4);
-    this.name = scene.add.text(190, H - 150, '', { fontFamily: 'monospace', fontSize: '18px', color: '#ffd27a' });
+    this.name = scene.add.text(190, H - 150, '', { fontFamily: FONT_BODY, fontSize: '28px', color: '#ffd27a' });
     this.body = scene.add.text(190, H - 124, '', {
-      fontFamily: 'monospace', fontSize: '17px', color: '#e8eefc', wordWrap: { width: W - 270 }, lineSpacing: 5,
+      fontFamily: FONT_BODY, fontSize: '26px', color: '#e8eefc', wordWrap: { width: W - 270 }, lineSpacing: 5,
     });
-    this.prompt = scene.add.text(W - 60, H - 38, 'space', { fontFamily: 'monospace', fontSize: '13px', color: '#7f8fc0' }).setOrigin(1, 0.5);
+    this.prompt = scene.add.text(W - 60, H - 38, 'space', { fontFamily: FONT_BODY, fontSize: '20px', color: '#7f8fc0' }).setOrigin(1, 0.5);
     scene.tweens.add({ targets: this.prompt, alpha: 0.2, yoyo: true, repeat: -1, duration: 600 });
     this.box = scene.add.container(0, 0, [panel, this.portraitFrame, this.portrait, this.name, this.body, this.prompt])
       .setScrollFactor(0).setDepth(90).setVisible(false);
@@ -46,7 +47,7 @@ export class Dialog {
   show(lines: Line[], onDone?: () => void, onLine?: (i: number) => void): void {
     if (this.active || lines.length === 0) return;
     this.lines = lines; this.index = 0; this.done = onDone; this.onLine = onLine; this.active = true;
-    this.holdOff = this.scene.time.now + 250;
+    this.holdOff = this.scene.time.now + 450; // ignore the key that was still down when the talk began
     this.box.setVisible(true);
     this.load();
   }

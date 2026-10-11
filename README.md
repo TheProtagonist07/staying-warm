@@ -5,7 +5,7 @@ A short cold-night platformer made for Mini Jam 221 (limitation: "Staying Warm")
 Play: A/D or arrows to move, Space/W/Z to jump, M to mute, R to restart after winning. Touch controls appear on phones and tablets.
 
 ## How it plays
-Three chapters (about 10 to 15 minutes with the story): The Orchard Path, The Cold Road, The Hearth Rise. A title page and prologue set it up, short scenes on the road add story, and an ending closes it.
+Three chapters plus a final stage (about 12 to 17 minutes with the story): The Orchard Path, The Cold Road, The Hearth Rise, and a short ember-catching mini game at the Great Hearth. A title page and prologue set it up, short scenes on the road add story, and an ending closes it.
 - Your warmth drains all the time, and faster in cold-wind zones. Standing near a lit lantern refills it. At zero you freeze and wake at the last lantern.
 - Sparks (gold coins) light lanterns when you walk up to them. Light every lantern in a chapter and the door at its end opens.
 - Land on blue slugs to squash them. Red spikers and bats hurt: hop or wait. Red mushrooms are springs.
@@ -16,7 +16,7 @@ Phaser 3 + TypeScript + Vite. `npm run dev` to play locally, `npm run zip` build
 
 - `src/level.ts`: the three chapters (platform segments, items, enemies, wind zones) and the warmth numbers.
 - `src/lib/story.ts`: every line of dialogue. `src/lib/dialog.ts`: the dialogue box.
-- `src/scenes/`: Boot (loading), Title (welcome page), Game (a chapter), End (the ending).
+- `src/scenes/`: Boot (loading), Title (welcome page), Game (a chapter), Hearth (the mini game), End (the ending).
 - `src/lib/atmosphere.ts`, `src/lib/scenery.ts`: sky, glow, fog, grain, mountains, stars, moon, drawn by code.
 - `public/assets`: art and audio. `third_party/`: the original downloads with their licence files. Credits: `public/CREDITS.txt`.
 

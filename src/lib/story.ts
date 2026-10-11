@@ -45,13 +45,18 @@ export const CHAPTER_OUTRO: Line[][] = [
   [
     { who: 'Narrator', text: 'At the summit the Great Hearth sat cold and grey, as tall as a house.' },
     { who: 'Wren', text: 'I carried every spark I had. It is not enough to light you, is it?' },
-    { who: 'Narrator', text: 'So she gave it the last one, her own.' },
-    { who: 'Narrator', text: 'The Hearth caught. Light ran down the mountain, lantern to lantern, all the way to Emberfall.' },
-    { who: 'Oren', text: 'I see them! I see them all! Every window, every lantern!' },
-    { who: 'Brann', text: 'The Hearth does not need fire, you know. It needs everyone\'s light, carried up together.' },
-    { who: 'Wren', text: 'Then it is a good thing we lit the whole road.' },
-    { who: 'Brann', text: 'That will hold till spring.' },
+    { who: 'Narrator', text: 'It was not. But every lantern she had lit was still burning, and their light was drifting up the mountain toward the Hearth.' },
+    { who: 'Wren', text: 'Then I will catch it for you.' },
   ],
+];
+
+/** After the Hearth mini game: the Hearth catches, and the story ends. */
+export const HEARTH_FINALE: Line[] = [
+  { who: 'Narrator', text: 'The Hearth caught. Light ran down the mountain, lantern to lantern, all the way to Emberfall.' },
+  { who: 'Oren', text: 'I see them! I see them all! Every window, every lantern!' },
+  { who: 'Brann', text: 'The Hearth does not need fire, you know. It needs everyone\'s light, carried up together.' },
+  { who: 'Wren', text: 'Then it is a good thing we lit the whole road.' },
+  { who: 'Brann', text: 'That will hold till spring.' },
 ];
 
 /** Short scenes where you meet someone on the road. They also hand you something warm. */
