@@ -1,14 +1,21 @@
 import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
-import { makeDisc, makeDot, makeRidge } from '../lib/scenery';
-import {
-  BATS, DOOR, FLAGS, GEMS, LANTERNS, PLATFORMS, S, SIGNS, SPARKS, SPAWN, T, WALKERS, WARMTH, WIND,
-  WORLD_H, WORLD_W,
-} from '../level';
+import { Dialog } from '../lib/dialog';
+import { makeDisc, makeDot, makeFrost, makePines, makeRibbon, makeRidge } from '../lib/scenery';
+import { CHAPTER_INTRO, CHAPTER_OUTRO, NPC_SCENES, PROLOGUE } from '../lib/story';
+import { LEVELS, S, T, WARMTH, buildLevel } from '../level';
+import type { BuiltLevel } from '../level';
 
 const W = 960, H = 540;
 const HERO_FRAME = 24;            // size of one character frame in the art
 const DEPTH = { sky: 0, far: 2, near: 4, tiles: 10, props: 12, items: 14, mob: 18, hero: 20, fx: 24, dark: 40, light: 41 };
+
+// How each chapter's mountains and aurora look. Chapter 1 is dusk-purple, chapter 3 deep night.
+const LOOK = [
+  { far: ['#5a4aa0', '#b8a8f0'], near: ['#241d56', '#5a4aa0'], pines: '#120f2c', aurora: [[0x9a6adf, 0.1], [0xdf8ad0, 0.08]] },
+  { far: ['#3a5090', '#8aa0dc'], near: ['#0b1230', '#2b3d74'], pines: '#070b1e', aurora: [[0x4fe0b0, 0.16], [0x4fd0e8, 0.12]] },
+  { far: ['#38388a', '#9fa0f0'], near: ['#080a24', '#242a70'], pines: '#05061a', aurora: [[0x70f0a0, 0.22], [0x8f7aff, 0.2], [0x4fe0e0, 0.14]] },
+] as const;
 
 interface Mob {
   kind: 'slug' | 'spiker' | 'bat'; sprite: Phaser.GameObjects.Sprite;
@@ -18,8 +25,14 @@ interface Lantern {
   x: number; top: number; lit: boolean; power: number; sprite: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image;
 }
 interface Pickup { x: number; y: number; got: boolean; sprite: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image }
+interface Stats { time: number; gems: number; gemsTotal: number; freezes: number }
 
 export class GameScene extends Phaser.Scene {
+  private idx = 0;
+  private lv!: BuiltLevel;
+  private prologue = false;
+  private dialog!: Dialog;
+
   private hero!: Phaser.Physics.Arcade.Sprite;
   private heroGlow!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -31,21 +44,23 @@ export class GameScene extends Phaser.Scene {
   private gemsGot = 0;
   private freezes = 0;
   private elapsed = 0;
-  private won = false;
-  private endAt = 0;
+  private finished = false;
   private invuln = 0;
   private stun = 0;
   private coyote = 0;
   private buffer = 0;
   private stepT = 0;
-  private spawn = { ...SPAWN };
+  private spawn = { x: 0, y: 0 };
   private inWind = false;
   private wasGrounded = true;
+  private launched = false;   // true while a spring is carrying you up
 
   private lanterns: Lantern[] = [];
   private sparkItems: Pickup[] = [];
   private gemItems: Pickup[] = [];
   private mobs: Mob[] = [];
+  private springs: { x: number; top: number; sprite: Phaser.GameObjects.Image; cool: number }[] = [];
+  private npcs: { x: number; top: number; id: string; sprite: Phaser.GameObjects.Sprite; mark: Phaser.GameObjects.Text; done: boolean }[] = [];
   private doorSprite!: Phaser.GameObjects.Image;
   private doorGlow!: Phaser.GameObjects.Image;
   private flags: Phaser.GameObjects.Image[] = [];
@@ -53,8 +68,12 @@ export class GameScene extends Phaser.Scene {
 
   private far!: Phaser.GameObjects.TileSprite;
   private near!: Phaser.GameObjects.TileSprite;
+  private pines!: Phaser.GameObjects.TileSprite;
   private grain!: Phaser.GameObjects.TileSprite;
+  private frost!: Phaser.GameObjects.Image;
   private stars: { s: Phaser.GameObjects.Image; phase: number }[] = [];
+  private ribbons: { img: Phaser.GameObjects.Image; phase: number; x: number }[] = [];
+  private flies: { s: Phaser.GameObjects.Image; hx: number; hy: number; phase: number }[] = [];
   private burstE!: Phaser.GameObjects.Particles.ParticleEmitter;
   private dustE!: Phaser.GameObjects.Particles.ParticleEmitter;
   private music?: Phaser.Sound.BaseSound;
@@ -67,11 +86,19 @@ export class GameScene extends Phaser.Scene {
 
   constructor() { super('Game'); }
 
+  init(data: { level?: number; prologue?: boolean }): void {
+    this.idx = data.level ?? 0;
+    this.prologue = !!data.prologue;
+  }
+
   create(): void {
+    this.lv = buildLevel(LEVELS[this.idx]!);
     this.warmth = WARMTH.max; this.sparks = 0; this.gemsGot = 0; this.freezes = 0; this.elapsed = 0;
-    this.won = false; this.invuln = 0; this.stun = 0; this.spawn = { ...SPAWN }; this.inWind = false;
-    this.lanterns = []; this.sparkItems = []; this.gemItems = []; this.mobs = []; this.flags = [];
-    this.signText = []; this.stars = []; this.wasGrounded = true; this.toastT = 0; this.jumpWas = false;
+    this.finished = false; this.invuln = 0; this.stun = 0; this.spawn = { ...this.lv.spawn }; this.inWind = false;
+    this.lanterns = []; this.sparkItems = []; this.gemItems = []; this.mobs = []; this.flags = []; this.springs = [];
+    this.npcs = []; this.signText = []; this.stars = []; this.ribbons = []; this.flies = [];
+    this.wasGrounded = true; this.launched = false; this.toastT = 0; this.jumpWas = false;
+    if (this.idx === 0 && this.prologue) this.registry.set('stats', { time: 0, gems: 0, gemsTotal: 0, freezes: 0 } as Stats);
 
     this.buildTextures();
     this.buildBackdrop();
@@ -82,83 +109,99 @@ export class GameScene extends Phaser.Scene {
     this.buildAtmosphere();
     this.buildHud();
     this.buildInput();
+    this.dialog = new Dialog(this);
 
-    this.physics.world.setBounds(0, -400, WORLD_W, WORLD_H + 800);
-    this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H).startFollow(this.hero, true, 0.1, 0.1);
+    this.physics.world.setBounds(0, -400, this.lv.worldW, this.lv.worldH + 800);
+    this.cameras.main.setBounds(0, 0, this.lv.worldW, this.lv.worldH).startFollow(this.hero, true, 0.1, 0.1);
     this.cameras.main.setDeadzone(60, 80);
-    this.cameras.main.fadeIn(700, 0, 0, 0);
+    this.cameras.main.fadeIn(900, 0, 0, 0);
 
-    this.music = this.sound.add('music', { loop: true, volume: 0.32 });
-    this.music.play();
-    this.windSnd = this.sound.add('wind', { loop: true, volume: 0.05 }) as Phaser.Sound.WebAudioSound;
-    this.windSnd.play();
-    this.events.once('shutdown', () => { this.music?.stop(); this.windSnd?.stop(); });
+    // Music and wind carry on across chapters instead of restarting.
+    this.music = this.sound.get('music') ?? this.sound.add('music', { loop: true, volume: 0.32 });
+    if (!this.music.isPlaying) this.music.play();
+    this.windSnd = (this.sound.get('wind') ?? this.sound.add('wind', { loop: true, volume: 0.05 })) as Phaser.Sound.WebAudioSound;
+    if (!this.windSnd.isPlaying) this.windSnd.play();
 
-    this.say('The village below is freezing.\nCarry sparks up the mountain and light every lantern.', 6500);
+    this.time.delayedCall(700, () => {
+      const intro = this.prologue ? [...PROLOGUE, ...CHAPTER_INTRO[this.idx]!] : CHAPTER_INTRO[this.idx]!;
+      this.dialog.show(intro, () => this.say(`Chapter ${this.idx + 1}: ${this.lv.def.name}`, 3000));
+    });
   }
 
   // ---------- building the scene ----------
 
   private buildTextures(): void {
+    const look = LOOK[this.idx]!;
+    const def = this.lv.def;
     makeDot(this);
-    makeSky(this, 'sky', W, H, '#0a1330', '#1b2a58');
+    makeSky(this, `sky${this.idx}`, W, H, def.sky[0], def.sky[1]);
     makeGlow(this, 'glow', 256);
     makeVignette(this, 'vignette', W, H);
     makeGrain(this, 'grain');
+    makeFrost(this, 'frost', W, H);
+    makeRibbon(this, 'ribbon', 140, 380);
     makeDisc(this, 'moon', 26, '#e6ecff', '#c3cdf0');
-    makeRidge(this, 'ridge-far', W, H, {
-      base: 220, amp: 160, body: '#2c3f78', snow: '#7a90cc',
-      waves: [[2, 1, 0.3], [3, 0.7, 1.9], [5, 0.4, 4.1]],
-    });
-    makeRidge(this, 'ridge-near', W, H, {
-      base: 110, amp: 120, body: '#0b1230', snow: '#2b3d74',
-      waves: [[3, 1, 2.2], [4, 0.6, 0.7], [7, 0.35, 3.3]],
-    });
+    makeRidge(this, `rf${this.idx}`, W, H, { base: 220, amp: 160, body: look.far[0], snow: look.far[1], waves: [[2, 1, 0.3], [3, 0.7, 1.9], [5, 0.4, 4.1]] });
+    makeRidge(this, `rn${this.idx}`, W, H, { base: 110, amp: 120, body: look.near[0], snow: look.near[1], waves: [[3, 1, 2.2], [4, 0.6, 0.7], [7, 0.35, 3.3]] });
+    makePines(this, `pn${this.idx}`, W, H, look.pines, 11 + this.idx * 7);
   }
 
   private buildBackdrop(): void {
+    const look = LOOK[this.idx]!;
     const fixed = <O extends Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.ScrollFactor>(o: O) => o.setScrollFactor(0) as O;
-    fixed(this.add.image(0, 0, 'sky').setOrigin(0, 0).setDepth(DEPTH.sky));
-    const r = rng(5);
-    for (let i = 0; i < 80; i++) {
+    fixed(this.add.image(0, 0, `sky${this.idx}`).setOrigin(0, 0).setDepth(DEPTH.sky));
+    const r = rng(5 + this.idx);
+    for (let i = 0; i < 90; i++) {
       const s = fixed(this.add.image(r() * W, r() * H * 0.6, 'dot').setDepth(DEPTH.sky + 0.5)
         .setAlpha(0.2 + r() * 0.6).setScale(0.5 + r() * 0.6));
       this.stars.push({ s, phase: r() * 10 });
     }
+    // aurora: tall soft ribbons high in the sky
+    look.aurora.forEach(([tint, a], n) => {
+      const x = 140 + n * 300 + r() * 80;
+      this.ribbons.push({
+        img: fixed(this.add.image(x, 110, 'ribbon').setTint(tint).setAlpha(a).setScale(2.4, 1.3)
+          .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.sky + 0.55)), phase: r() * 10, x,
+      });
+    });
     fixed(this.add.image(W * 0.78, 96, 'glow').setScale(3.4).setTint(0x4a62b8).setAlpha(0.3)
       .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.sky + 0.6));
     fixed(this.add.image(W * 0.78, 96, 'moon').setDepth(DEPTH.sky + 0.7));
-    this.far = fixed(this.add.tileSprite(0, 0, W, H, 'ridge-far').setOrigin(0, 0).setDepth(DEPTH.far));
-    this.near = fixed(this.add.tileSprite(0, 0, W, H, 'ridge-near').setOrigin(0, 0).setDepth(DEPTH.far + 1));
+    this.far = fixed(this.add.tileSprite(0, 0, W, H, `rf${this.idx}`).setOrigin(0, 0).setDepth(DEPTH.far));
+    this.near = fixed(this.add.tileSprite(0, 0, W, H, `rn${this.idx}`).setOrigin(0, 0).setDepth(DEPTH.far + 1));
+    this.pines = fixed(this.add.tileSprite(0, 0, W, H, `pn${this.idx}`).setOrigin(0, 0).setDepth(DEPTH.far + 1.5));
   }
 
   /** Tiles, scenery and the invisible collision boxes. Returns the solid group. */
   private buildWorld(): Phaser.Physics.Arcade.StaticGroup {
+    const lv = this.lv, def = lv.def;
     const solids = this.physics.add.staticGroup();
-    const r = rng(11);
-    PLATFORMS.forEach((p, n) => {
-      const snowy = p.row <= 17;
+    const r = rng(11 + this.idx);
+    lv.platforms.forEach((p, n) => {
+      const snowy = p.row <= def.snowRow;
       const left = p.col * T, top = p.row * T, width = p.w * T;
       // One collision box per platform. The tiles are only paint.
-      solids.add(this.add.rectangle(left + width / 2, top + (WORLD_H - top) / 2 + 200, width, WORLD_H - top + 400).setVisible(false));
+      solids.add(this.add.rectangle(left + width / 2, top + (lv.worldH - top) / 2 + 200, width, lv.worldH - top + 400).setVisible(false));
       // Dark mass under the visible tile rows, so the cliff reads against the sky.
-      this.add.rectangle(left + width / 2, top + 4 * T + (WORLD_H - top) / 2, width, WORLD_H - top, 0x0e1428).setDepth(DEPTH.tiles - 1);
+      this.add.rectangle(left + width / 2, top + 4 * T + (lv.worldH - top) / 2, width, lv.worldH - top, 0x0e1428).setDepth(DEPTH.tiles - 1);
       for (let c = 0; c < p.w; c++) {
         const first = c === 0, last = c === p.w - 1;
         const topTile = snowy ? (first ? 80 : last ? 83 : 81 + (c % 2)) : (first ? 0 : last ? 3 : 1 + (c % 2));
-        this.tile(left + c * T, top, topTile, DEPTH.tiles);
+        const t = this.tile(left + c * T, top, topTile, DEPTH.tiles);
+        if (!snowy) t.setTint(def.grass); // autumn orange in chapter 1
         for (let k = 1; k <= 3; k++) this.tile(left + c * T, top + k * T, [4, 5, 24, 25][Math.floor(r() * 4)]!, DEPTH.tiles);
       }
-      // A few plain props so the ground isn't bare.
+      // A few plain props so the ground isn't bare: pines, sprouts and mushrooms.
       if (p.w >= 5 && n > 0) {
         for (let i = 0; i < Math.floor(p.w / 3); i++) {
-          const kind = [126, 126, 128, 124, 125][Math.floor(r() * 5)]!;
+          const pool = [126, 126, 128, 124, 125];
+          const kind = pool[Math.floor(r() * pool.length)]!;
           this.add.image(left + (1 + r() * (p.w - 2)) * T, top, 'tiles', kind).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props - 1);
         }
       }
     });
 
-    for (const sgn of SIGNS) {
+    for (const sgn of lv.signs) {
       this.add.image(sgn.x, sgn.top, 'tiles', 86).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
       const text = this.add.text(sgn.x, sgn.top - 2 * T - 10, sgn.text, {
         fontFamily: 'monospace', fontSize: '13px', color: '#101624', backgroundColor: '#e8e2cf',
@@ -167,7 +210,7 @@ export class GameScene extends Phaser.Scene {
       this.signText.push({ x: sgn.x, top: sgn.top, text });
     }
 
-    for (const wz of WIND) {
+    for (const wz of lv.wind) {
       this.add.rectangle(wz.x + wz.w / 2, wz.y + wz.h / 2, wz.w, wz.h, 0x9db8ff, 0.07).setDepth(DEPTH.dark - 1);
       this.add.particles(0, 0, 'dot', {
         emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(wz.x, wz.y + wz.h * 0.25, wz.w, wz.h * 0.5), quantity: 1 },
@@ -178,12 +221,13 @@ export class GameScene extends Phaser.Scene {
     return solids;
   }
 
-  private tile(x: number, y: number, frame: number, depth: number): void {
-    this.add.image(x, y, 'tiles', frame).setOrigin(0, 0).setScale(S).setDepth(depth);
+  private tile(x: number, y: number, frame: number, depth: number): Phaser.GameObjects.Image {
+    return this.add.image(x, y, 'tiles', frame).setOrigin(0, 0).setScale(S).setDepth(depth);
   }
 
   private buildItems(): void {
-    for (const f of FLAGS) {
+    const lv = this.lv;
+    for (const f of lv.flags) {
       this.flags.push(this.add.image(f.x, f.top, 'tiles', 111).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props));
     }
     this.tweens.addCounter({
@@ -192,12 +236,13 @@ export class GameScene extends Phaser.Scene {
     });
 
     // The door is two tiles tall: 130 on top of 150.
-    this.add.image(DOOR.x, DOOR.top, 'tiles', 150).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
-    this.doorSprite = this.add.image(DOOR.x, DOOR.top - T, 'tiles', 130).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
-    this.doorGlow = this.add.image(DOOR.x, DOOR.top - T, 'glow').setScale(2.6).setTint(0xffd27a)
+    const d = lv.door;
+    this.add.image(d.x, d.top, 'tiles', 150).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
+    this.doorSprite = this.add.image(d.x, d.top - T, 'tiles', 130).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
+    this.doorGlow = this.add.image(d.x, d.top - T, 'glow').setScale(2.6).setTint(0xffd27a)
       .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light).setAlpha(0);
 
-    for (const l of LANTERNS) {
+    for (const l of lv.lanterns) {
       const sprite = this.add.image(l.x, l.top, 'tiles', 129).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props).setTint(0x4a5578);
       const glow = this.add.image(l.x, l.top - T, 'glow').setScale(2.6).setTint(0xffc46a)
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light).setAlpha(0);
@@ -211,24 +256,40 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({ targets: [sprite, glow], y: p.y - 6, duration: 900 + Math.random() * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       return { x: p.x, y: p.y, got: false, sprite, glow };
     };
-    for (const p of SPARKS) this.sparkItems.push(pickup(p, 151, 0xffc46a, 0.55));
-    for (const p of GEMS) this.gemItems.push(pickup(p, 67, 0x6ad0ff, 0.5));
+    for (const p of lv.sparks) this.sparkItems.push(pickup(p, 151, 0xffc46a, 0.55));
+    for (const p of lv.gems) this.gemItems.push(pickup(p, 67, 0x6ad0ff, 0.5));
+
+    for (const sp of lv.springs) {
+      this.springs.push({ x: sp.x, top: sp.top, cool: 0, sprite: this.add.image(sp.x, sp.top, 'tiles', 107).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props) });
+    }
+
+    // People on the road. A "!" floats above them until you have spoken.
+    const frames: Record<string, number> = { pip: 0, moth: 4, brann: 9 };
+    for (const n of lv.npcs) {
+      const sprite = this.add.sprite(n.x, n.top, 'chars', frames[n.id] ?? 0).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.mob - 1);
+      this.tweens.add({ targets: sprite, y: n.top - 3, yoyo: true, repeat: -1, duration: 800, ease: 'Sine.easeInOut' });
+      const mark = this.add.text(n.x, n.top - 66, '!', { fontFamily: 'monospace', fontSize: '24px', color: '#ffd27a', fontStyle: 'bold' })
+        .setOrigin(0.5).setDepth(DEPTH.fx);
+      this.tweens.add({ targets: mark, y: n.top - 74, yoyo: true, repeat: -1, duration: 500 });
+      this.npcs.push({ x: n.x, top: n.top, id: n.id, sprite, mark, done: false });
+    }
   }
 
   private buildMobs(): void {
-    for (const w of WALKERS) {
+    for (const w of this.lv.walkers) {
       const sprite = this.add.sprite(w.x, w.top, 'chars', 0).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.mob).play(w.kind);
       this.mobs.push({ kind: w.kind, sprite, x0: w.x, y0: w.top, minX: w.minX, maxX: w.maxX, dir: 1, alive: true, t: 0 });
     }
-    for (const b of BATS) {
+    for (const b of this.lv.bats) {
       const sprite = this.add.sprite(b.x, b.y, 'chars', 24).setScale(S).setDepth(DEPTH.mob).play('bat');
       this.mobs.push({ kind: 'bat', sprite, x0: b.x, y0: b.y, minX: 0, maxX: 0, dir: 1, alive: true, t: Math.random() * 6 });
     }
   }
 
   private buildHero(solids: Phaser.Physics.Arcade.StaticGroup): void {
-    this.heroGlow = this.add.image(SPAWN.x, SPAWN.y, 'glow').setTint(0xffd9a8).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light);
-    this.hero = this.physics.add.sprite(SPAWN.x, SPAWN.y, 'chars', 6).setScale(S).setDepth(DEPTH.hero);
+    const sp = this.lv.spawn;
+    this.heroGlow = this.add.image(sp.x, sp.y, 'glow').setTint(0xffd9a8).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light);
+    this.hero = this.physics.add.sprite(sp.x, sp.y, 'chars', 6).setScale(S).setDepth(DEPTH.hero);
     this.hero.body!.setSize(12, 20).setOffset((HERO_FRAME - 12) / 2, 3);
     this.hero.setCollideWorldBounds(true);
     this.hero.play('hero-idle');
@@ -236,16 +297,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildAtmosphere(): void {
-    // Everything is multiplied by a cold blue so the bright art sits in the night; lights are added on top.
-    this.add.rectangle(0, 0, W, H, 0x6a7ab0).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.dark)
+    const def = this.lv.def;
+    // Everything is multiplied by a cold colour so the bright art sits in the night; lights are added on top.
+    this.add.rectangle(0, 0, W, H, def.tint).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.dark)
       .setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.add.image(0, 0, 'vignette').setOrigin(0, 0).setScrollFactor(0).setDepth(50);
+    this.frost = this.add.image(0, 0, 'frost').setOrigin(0, 0).setScrollFactor(0).setDepth(52).setAlpha(0);
     this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setScrollFactor(0).setDepth(51).setAlpha(0.28);
 
-    this.add.particles(0, 0, 'dot', {
-      x: { min: 0, max: W }, y: -10, lifespan: 7000, speedY: { min: 35, max: 85 }, speedX: { min: -35, max: -10 },
-      scale: { min: 1, max: 2.4 }, alpha: { min: 0.4, max: 0.9 }, frequency: 70,
-    }).setScrollFactor(0).setDepth(DEPTH.fx);
+    if (def.weather === 'snow') {
+      this.add.particles(0, 0, 'dot', {
+        x: { min: 0, max: W }, y: -10, lifespan: 7000, speedY: { min: 35, max: 85 }, speedX: { min: -35, max: -10 },
+        scale: { min: 1, max: 2.4 }, alpha: { min: 0.4, max: 0.9 }, frequency: this.idx === 2 ? 38 : 70,
+      }).setScrollFactor(0).setDepth(DEPTH.fx);
+    } else {
+      // Autumn: drifting leaves in a few warm colours, with a little spin.
+      for (const tint of [0xe8742a, 0xd9531e, 0xe8a33d]) {
+        this.add.particles(0, 0, 'dot', {
+          x: { min: 0, max: W }, y: -10, lifespan: 9000, speedY: { min: 30, max: 60 }, speedX: { min: -40, max: 10 },
+          scaleX: { min: 2.4, max: 3.6 }, scaleY: { min: 1.6, max: 2.4 }, rotate: { min: 0, max: 360 }, alpha: { min: 0.7, max: 1 },
+          frequency: 420, tint,
+        }).setScrollFactor(0).setDepth(DEPTH.fx);
+      }
+      // Fireflies wandering above the grass.
+      const r = rng(77);
+      for (let i = 0; i < 16; i++) {
+        const hx = 200 + r() * (this.lv.worldW - 400), hy = this.lv.worldH * 0.35 + r() * this.lv.worldH * 0.5;
+        const s = this.add.image(hx, hy, 'dot').setTint(0xfff3b0).setBlendMode(Phaser.BlendModes.ADD).setScale(1.6).setDepth(DEPTH.fx);
+        this.flies.push({ s, hx, hy, phase: r() * 10 });
+      }
+    }
 
     this.burstE = this.add.particles(0, 0, 'dot', {
       lifespan: { min: 400, max: 900 }, speed: { min: 40, max: 150 }, angle: { min: 0, max: 360 },
@@ -262,13 +343,14 @@ export class GameScene extends Phaser.Scene {
     this.hud = this.add.text(W - 16, 14, '', { fontFamily: 'monospace', fontSize: '15px', color: '#dfe8ff', align: 'right' })
       .setOrigin(1, 0).setScrollFactor(0).setDepth(60);
     this.add.text(16, 8, 'WARMTH', { fontFamily: 'monospace', fontSize: '13px', color: '#ffd27a' }).setScrollFactor(0).setDepth(60);
+    this.add.text(16, 48, `${this.idx + 1}/3  ${this.lv.def.name}`, { fontFamily: 'monospace', fontSize: '12px', color: '#9db8ff' }).setScrollFactor(0).setDepth(60);
     this.toast = this.add.text(W / 2, 90, '', {
       fontFamily: 'monospace', fontSize: '17px', color: '#ffffff', align: 'center', backgroundColor: '#0a1020cc', padding: { x: 10, y: 6 },
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60).setAlpha(0);
   }
 
   private buildInput(): void {
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,R,M') as typeof this.keys;
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,M') as typeof this.keys;
     if (!this.sys.game.device.input.touch) return;
     // On-screen buttons for phones and tablets: move on the left, jump on the right.
     const btn = (x: number, y: number, label: string, key: 'left' | 'right' | 'jump', w = 96) => {
@@ -295,16 +377,23 @@ export class GameScene extends Phaser.Scene {
   // ---------- per-frame ----------
 
   update(time: number, dt: number): void {
-    const restart = Phaser.Input.Keyboard.JustDown(this.keys.R!);
     if (Phaser.Input.Keyboard.JustDown(this.keys.M!)) this.sound.mute = !this.sound.mute; // M toggles all sound
-    if (this.won) {
-      if (restart || (this.input.activePointer.isDown && this.time.now > this.endAt)) this.scene.restart();
+    this.dialog.update(dt);
+
+    if (this.dialog.active || this.finished) {
+      // Talking or between chapters: the world holds still.
+      const b = this.hero.body as Phaser.Physics.Arcade.Body;
+      b.setVelocityX(0);
+      this.pose(0, b.blocked.down);
+      this.jumpWas = true;
     } else {
       this.elapsed += dt;
       this.moveHero(dt);
       this.updateWarmth(dt);
       this.updateMobs(time, dt);
       this.updatePickups();
+      this.updateSprings(dt);
+      this.updateNpcs();
     }
     this.updateLooks(time, dt);
 
@@ -312,7 +401,7 @@ export class GameScene extends Phaser.Scene {
       this.toastT -= dt;
       if (this.toastT < 400) this.toast.setAlpha(Math.max(0, this.toastT / 400));
     }
-    if (!this.won && this.hero.y > WORLD_H + 80) this.freeze(true);
+    if (!this.finished && this.hero.y > this.lv.worldH + 80) this.freeze(true);
   }
 
   private moveHero(dt: number): void {
@@ -339,7 +428,9 @@ export class GameScene extends Phaser.Scene {
       this.sound.play('phaseJump1', { volume: 0.28 });
       this.dustE.emitParticleAt(this.hero.x, this.hero.y + 28, 4);
     }
-    if (!jumpDown && body.velocity.y < -150) body.setVelocityY(body.velocity.y * 0.5); // release early = short hop
+    if (this.launched && (grounded || body.velocity.y > 0)) this.launched = false;
+    // release early = short hop (but never cut a spring launch short)
+    if (!this.launched && !jumpDown && body.velocity.y < -150) body.setVelocityY(body.velocity.y * 0.5);
 
     this.pose(dir, grounded);
     if (grounded && Math.abs(body.velocity.x) > 90) {
@@ -364,7 +455,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateWarmth(dt: number): void {
     const s = dt / 1000;
-    this.inWind = WIND.some((w) => this.hero.x > w.x && this.hero.x < w.x + w.w && this.hero.y > w.y && this.hero.y < w.y + w.h);
+    this.inWind = this.lv.wind.some((w) => this.hero.x > w.x && this.hero.x < w.x + w.w && this.hero.y > w.y && this.hero.y < w.y + w.h);
     let delta = -(this.inWind ? WARMTH.windDrain : WARMTH.drain);
     const near = this.lanterns.some((l) => l.lit && Phaser.Math.Distance.Between(this.hero.x, this.hero.y, l.x, l.top - T) < WARMTH.lanternRadius);
     if (near) delta = WARMTH.regen;
@@ -433,6 +524,40 @@ export class GameScene extends Phaser.Scene {
     } else this.hero.setAlpha(1);
   }
 
+  private updateSprings(dt: number): void {
+    const hb = this.hero.body as Phaser.Physics.Arcade.Body;
+    for (const sp of this.springs) {
+      sp.cool -= dt;
+      if (sp.cool > 0 || Math.abs(hb.center.x - sp.x) > 22 || Math.abs(hb.bottom - sp.top) > 14 || hb.velocity.y < -60) continue;
+      sp.cool = 400;
+      this.hero.setVelocityY(-690);
+      this.launched = true;
+      this.coyote = 0;
+      sp.sprite.setFrame(108);
+      this.time.delayedCall(180, () => sp.sprite.setFrame(107));
+      this.burstE.emitParticleAt(sp.x, sp.top - 8, 8);
+      this.sound.play('phaseJump1', { volume: 0.4, rate: 1.4 });
+    }
+  }
+
+  private updateNpcs(): void {
+    for (const n of this.npcs) {
+      if (n.done || Math.abs(this.hero.x - n.x) > 90 || Math.abs(this.hero.y - (n.top - 30)) > 80) continue;
+      n.done = true;
+      n.mark.setVisible(false);
+      n.sprite.setFlipX(this.hero.x < n.x);
+      this.hero.setFlipX(this.hero.x < n.x ? false : true);
+      this.dialog.show(NPC_SCENES[n.id] ?? [], () => {
+        this.warmth = WARMTH.max;
+        this.burstE.setParticleTint(0xffc46a);
+        this.burstE.emitParticleAt(this.hero.x, this.hero.y, 14);
+        this.burstE.setParticleTint(0xffffff);
+        this.sound.play('powerUp3', { volume: 0.35 });
+        this.say('Warmed up.', 1600);
+      });
+    }
+  }
+
   private updatePickups(): void {
     const hx = this.hero.x, hy = this.hero.y;
     for (const p of this.sparkItems) {
@@ -451,7 +576,7 @@ export class GameScene extends Phaser.Scene {
       this.burstE.emitParticleAt(p.x, p.y, 14);
       this.burstE.setParticleTint(0xffffff);
       this.sound.play('powerUp7', { volume: 0.35 });
-      this.say(`Star shard ${this.gemsGot} of ${GEMS.length}`, 1500);
+      this.say(`Star shard ${this.gemsGot} of ${this.gemItems.length}`, 1500);
     }
     for (const l of this.lanterns) {
       if (l.lit || Math.abs(hx - l.x) > 54 || Math.abs(hy - (l.top - T)) > 90) continue;
@@ -470,35 +595,43 @@ export class GameScene extends Phaser.Scene {
       const lit = this.lanterns.filter((q) => q.lit).length;
       this.say(lit === this.lanterns.length ? 'Every lantern is lit!\nGo to the door.' : `Lantern lit  ${lit} / ${this.lanterns.length}`, 2000);
     }
+    const d = this.lv.door;
     const allLit = this.lanterns.every((l) => l.lit);
-    if (Math.abs(hx - DOOR.x) < 38 && Math.abs(hy - (DOOR.top - T)) < 70) {
-      if (allLit) this.win();
+    if (Math.abs(hx - d.x) < 38 && Math.abs(hy - (d.top - T)) < 70) {
+      if (allLit) this.finishChapter();
       else if (this.toastT <= 0) this.say(`The door is frozen shut.\nLight all ${this.lanterns.length} lanterns first.`, 2000);
     }
   }
 
-  private win(): void {
-    this.won = true;
-    this.endAt = this.time.now + 1500;
+  /** The door opens: tell the end of the chapter, then go on to the next one (or the ending). */
+  private finishChapter(): void {
+    this.finished = true;
+    const stats = (this.registry.get('stats') ?? { time: 0, gems: 0, gemsTotal: 0, freezes: 0 }) as Stats;
+    this.registry.set('stats', stats);
+    stats.time += this.elapsed; stats.gems += this.gemsGot; stats.gemsTotal += this.gemItems.length; stats.freezes += this.freezes;
     const body = this.hero.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, 0); body.setAllowGravity(false);
+    body.setVelocity(0, 0);
     this.sound.play('pepSound2', { volume: 0.5 });
-    this.burstE.emitParticleAt(DOOR.x, DOOR.top - T, 30);
-    const secs = Math.round(this.elapsed / 1000);
-    const lines = [
-      'WARM AGAIN',
-      '',
-      'The lanterns are burning all the way down the mountain.',
-      'The village will see them.',
-      '',
-      `time ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}    star shards ${this.gemsGot} / ${GEMS.length}    froze ${this.freezes}x`,
-      '',
-      'press R or tap to play again',
-    ];
-    this.add.rectangle(0, 0, W, H, 0x000000, 0.65).setOrigin(0, 0).setScrollFactor(0).setDepth(80);
-    this.add.text(W / 2, H / 2, lines.join('\n'), {
-      fontFamily: 'monospace', fontSize: '20px', color: '#dfe8ff', align: 'center', lineSpacing: 6,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(81);
+    this.burstE.emitParticleAt(this.lv.door.x, this.lv.door.top - T, 30);
+    const last = this.idx === LEVELS.length - 1;
+
+    this.dialog.show(CHAPTER_OUTRO[this.idx]!, () => {
+      if (last) {
+        this.cameras.main.fadeOut(1400, 255, 240, 210);
+        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('End'));
+      } else {
+        this.cameras.main.fadeOut(800, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart({ level: this.idx + 1 }));
+      }
+    }, last ? (i) => {
+      // At the Hearth, the moment it catches: a flash of light.
+      if (i === 3) {
+        this.cameras.main.flash(900, 255, 220, 150);
+        this.burstE.emitParticleAt(this.lv.door.x, this.lv.door.top - 2 * T, 60);
+        this.sound.play('impactBell_heavy_000', { volume: 0.7 });
+        this.doorGlow.setScale(6);
+      }
+    } : undefined);
   }
 
   /** Lights, fades and the HUD. */
@@ -506,18 +639,29 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     this.far.tilePositionX = cam.scrollX * 0.06; this.far.tilePositionY = cam.scrollY * 0.07;
     this.near.tilePositionX = cam.scrollX * 0.14; this.near.tilePositionY = cam.scrollY * 0.12;
+    this.pines.tilePositionX = cam.scrollX * 0.24; this.pines.tilePositionY = cam.scrollY * 0.16;
     for (const st of this.stars) st.s.setAlpha(0.35 + 0.35 * Math.sin(time * 0.002 + st.phase));
+    for (const r of this.ribbons) {
+      r.img.x = r.x + Math.sin(time * 0.0003 + r.phase) * 40 - cam.scrollX * 0.01;
+      r.img.setScale(2.4 + Math.sin(time * 0.0006 + r.phase) * 0.5, 1.3 + Math.sin(time * 0.0004 + r.phase) * 0.2);
+    }
+    for (const f of this.flies) {
+      f.s.x = f.hx + Math.cos(time * 0.0007 + f.phase) * 30; f.s.y = f.hy + Math.sin(time * 0.0011 + f.phase * 1.7) * 16;
+      f.s.setAlpha(0.2 + 0.8 * Math.max(0, Math.sin(time * 0.004 + f.phase * 3)));
+    }
     if (Math.floor(time / 45) !== Math.floor((time - dt) / 45)) {
       this.grain.tilePositionX = Math.floor(Math.random() * 128);
       this.grain.tilePositionY = Math.floor(Math.random() * 128);
     }
 
-    // The hero's own light shrinks and cools as warmth drops. This is the main way the player sees the meter.
+    // The hero's own light shrinks and cools as warmth drops, and frost creeps in from the edges of the
+    // screen. These are the main ways the player feels the meter.
     const w = this.warmth / WARMTH.max;
     const cold = this.warmth < 30;
     this.heroGlow.setPosition(this.hero.x, this.hero.y).setScale(0.7 + w * 1.5).setAlpha(0.18 + w * 0.4);
     this.heroGlow.setTint(cold ? 0x8fa8ff : 0xffd9a8);
     this.hero.setTint(cold ? 0xa9bdff : 0xffffff);
+    this.frost.setAlpha(Phaser.Math.Clamp((45 - this.warmth) / 45, 0, 1) * 0.75);
 
     for (const l of this.lanterns) {
       if (l.lit) {
@@ -539,7 +683,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(Phaser.Display.Color.GetColor(Math.round(110 + 145 * w), Math.round(120 + 80 * w), Math.round(255 - 150 * w)), 1)
       .fillRect(16, 28, 180 * w, 12);
     g.lineStyle(2, this.inWind ? 0x9db8ff : 0xffd27a, 0.9).strokeRect(14, 26, 184, 16);
-    this.hud.setText(`sparks ${this.sparks}\nlanterns ${this.lanterns.filter((l) => l.lit).length} / ${this.lanterns.length}\nshards ${this.gemsGot} / ${GEMS.length}`);
+    this.hud.setText(`sparks ${this.sparks}\nlanterns ${this.lanterns.filter((l) => l.lit).length} / ${this.lanterns.length}\nshards ${this.gemsGot} / ${this.gemItems.length}`);
 
     for (const s of this.signText) {
       const near = Math.abs(this.hero.x - s.x) < 150 && Math.abs(this.hero.y - s.top) < 120;

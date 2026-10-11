@@ -10,24 +10,25 @@
 
 ## Page body
 
-The village below the mountain is freezing. The lanterns along the path have gone out, and the only warmth left is the spark you carry.
+Emberfall is freezing. The Great Hearth at the top of Mount Hollow has gone out, the lanterns along the path are dark, and you are the last apprentice lamplighter.
 
-**Staying Warm** is a short platformer (about 3 to 5 minutes) built around one idea: you are always cold.
+**Staying Warm** is a short story-driven platformer in three chapters (about 10 to 15 minutes) built around one idea: you are always cold.
 - Your warmth drains as you walk, and drains fast in the cold wind.
 - Lit lanterns warm you back up and save your place.
-- Find a spark, climb to the next lantern, light it. Light all six and the door at the summit opens.
-- Squash the slugs. Hop the spikers. Wait for the bats to pass.
-- There are five hidden star shards above the route if you want a harder run.
+- Carry sparks up the mountain and light every lantern to open each chapter's door.
+- Squash the slugs, hop the spikers, wait for the bats to pass, and bounce on the red mushrooms.
+- Meet the people on the road. A few have a story to tell, and something warm to give you.
+- Seven hidden star shards sit above the route if you want a harder run.
 
 **Controls**
 - Move: A / D or arrow keys
 - Jump: Space, W or Z (hold for a higher jump)
+- Talk / continue: Space, Enter, Z or click
 - Mute: M
-- Restart (after winning): R or tap
 - Phones and tablets: on-screen buttons. Landscape works best.
 
 **For the jam**
-Limitation "Staying Warm": warmth is the whole game. It is a resource that drains, a reason to move on, and the thing you give to each lantern you light.
+Limitation "Staying Warm": warmth is the whole game. It is a resource that drains, a reason to keep moving, and the thing you give to every lantern and every neighbour on the way up.
 
 **Credits**
 - Art: "Pixel Platformer" by Kenney (CC0), kenney.nl

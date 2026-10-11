@@ -22,7 +22,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { width, height } = this.scale;
     const a = this.anims;
     a.create({ key: 'hero-idle', frames: [{ key: 'chars', frame: 6 }], frameRate: 1 });
     a.create({ key: 'hero-walk', frames: [{ key: 'chars', frame: 6 }, { key: 'chars', frame: 7 }], frameRate: 8, repeat: -1 });
@@ -31,22 +30,6 @@ export class BootScene extends Phaser.Scene {
     a.create({ key: 'slug', frames: [18, 19, 20].map((frame) => ({ key: 'chars', frame })), frameRate: 5, repeat: -1 });
     a.create({ key: 'bat', frames: [24, 25, 26].map((frame) => ({ key: 'chars', frame })), frameRate: 8, repeat: -1 });
 
-    this.add.sprite(width / 2, height / 2 - 165, 'chars', 6).setScale(6).play('hero-walk');
-    this.add.text(width / 2, height / 2 - 20, 'STAYING WARM', {
-      fontFamily: 'monospace', fontSize: '52px', color: '#ffd27a',
-    }).setOrigin(0.5);
-    this.add.text(width / 2, height / 2 + 34, 'Carry sparks up the frozen mountain.\nLight every lantern. Stay warm.', {
-      fontFamily: 'monospace', fontSize: '18px', color: '#c9d6ff', align: 'center',
-    }).setOrigin(0.5, 0);
-    const go = this.add.text(width / 2, height / 2 + 120, 'click or tap to start', {
-      fontFamily: 'monospace', fontSize: '22px', color: '#ffffff',
-    }).setOrigin(0.5);
-    this.tweens.add({ targets: go, alpha: 0.3, yoyo: true, repeat: -1, duration: 700 });
-    this.add.text(width / 2, height - 22,
-      'Art: Kenney (CC0)   Music: "Snow Theme" by CleytonKauffman (CC0)   Wind: gerardogc2378 (CC0)   Sounds: Kenney (CC0)', {
-        fontFamily: 'monospace', fontSize: '11px', color: '#6f7fae',
-      }).setOrigin(0.5);
-    this.input.once('pointerdown', () => this.scene.start('Game'));
-    this.input.keyboard?.once('keydown', () => this.scene.start('Game'));
+    this.scene.start('Title');
   }
 }

@@ -23,6 +23,7 @@ function canvasTex(scene: Phaser.Scene, key: string, w: number, h: number) {
 
 /** White radial glow; tint it per light at runtime and draw with ADD blend. */
 export function makeGlow(scene: Phaser.Scene, key: string, size: number): void {
+  if (scene.textures.exists(key)) return; // keep the old one: scenes that still use it would break if it were rebuilt
   const { tex, ctx } = canvasTex(scene, key, size, size);
   const r = size / 2;
   const g = ctx.createRadialGradient(r, r, 0, r, r, r);
@@ -36,6 +37,7 @@ export function makeGlow(scene: Phaser.Scene, key: string, size: number): void {
 
 /** Dark corners that pull the eye to the centre. */
 export function makeVignette(scene: Phaser.Scene, key: string, w: number, h: number): void {
+  if (scene.textures.exists(key)) return; // keep the old one: scenes that still use it would break if it were rebuilt
   const { tex, ctx } = canvasTex(scene, key, w, h);
   const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, w * 0.65);
   g.addColorStop(0, 'rgba(0,0,0,0)');
@@ -47,6 +49,7 @@ export function makeVignette(scene: Phaser.Scene, key: string, w: number, h: num
 
 /** Tileable film-grain: random black/white specks with low alpha. */
 export function makeGrain(scene: Phaser.Scene, key: string, size = 128): void {
+  if (scene.textures.exists(key)) return; // keep the old one: scenes that still use it would break if it were rebuilt
   const { tex, ctx } = canvasTex(scene, key, size, size);
   const img = ctx.createImageData(size, size);
   const rand = rng(7);
@@ -61,6 +64,7 @@ export function makeGrain(scene: Phaser.Scene, key: string, size = 128): void {
 
 /** Horizontal fog band: transparent at top and bottom, soft in the middle. Tint at runtime. */
 export function makeFog(scene: Phaser.Scene, key: string, w: number, h: number): void {
+  if (scene.textures.exists(key)) return; // keep the old one: scenes that still use it would break if it were rebuilt
   const { tex, ctx } = canvasTex(scene, key, w, h);
   const g = ctx.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, 'rgba(255,255,255,0)');
@@ -85,6 +89,7 @@ export function makeFog(scene: Phaser.Scene, key: string, w: number, h: number):
 
 /** Vertical sky gradient. */
 export function makeSky(scene: Phaser.Scene, key: string, w: number, h: number, top: string, bottom: string): void {
+  if (scene.textures.exists(key)) return; // keep the old one: scenes that still use it would break if it were rebuilt
   const { tex, ctx } = canvasTex(scene, key, w, h);
   const g = ctx.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, top);
