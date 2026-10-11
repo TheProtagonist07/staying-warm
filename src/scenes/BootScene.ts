@@ -1,22 +1,52 @@
 import Phaser from 'phaser';
-import { makeHero } from '../lib/hero';
-import { C, hex } from '../lib/palette';
-import { sfx } from '../lib/sfx';
 
-// Title screen. A click/tap is required anyway to unlock browser audio.
+const A = 'assets/audio/';
+
+// Loads everything, then shows the title. A click or tap is needed anyway to unlock browser audio.
 export class BootScene extends Phaser.Scene {
   constructor() { super('Boot'); }
 
+  preload(): void {
+    const { width, height } = this.scale;
+    const bar = this.add.rectangle(width / 2 - 120, height / 2, 0, 8, 0xffd27a).setOrigin(0, 0.5);
+    this.add.rectangle(width / 2, height / 2, 244, 12).setStrokeStyle(1, 0x4a5c99);
+    this.load.on('progress', (p: number) => { bar.width = 240 * p; });
+
+    this.load.spritesheet('tiles', 'assets/art/tiles.png', { frameWidth: 18, frameHeight: 18 });
+    this.load.spritesheet('chars', 'assets/art/characters.png', { frameWidth: 24, frameHeight: 24 });
+    for (const k of ['phaseJump1', 'powerUp3', 'powerUp7', 'lowDown', 'phaserDown2', 'pepSound2',
+      'footstep_snow_000', 'footstep_snow_001', 'footstep_snow_002', 'impactBell_heavy_000',
+      'impactSoft_medium_000', 'impactSoft_medium_001', 'impactMetal_light_000']) this.load.audio(k, `${A}${k}.ogg`);
+    this.load.audio('music', `${A}music-snow.ogg`);
+    this.load.audio('wind', `${A}wind.mp3`);
+  }
+
   create(): void {
     const { width, height } = this.scale;
-    makeHero(this);
-    this.add.sprite(width / 2, height / 2 - 90, 'hero', 0).setOrigin(0.5, 1).setScale(8).play('hero-idle');
-    this.add.text(width / 2, height / 2 - 40, 'LOOK PROTOTYPE', {
-      fontFamily: 'monospace', fontSize: '48px', color: hex(C.gold),
+    const a = this.anims;
+    a.create({ key: 'hero-idle', frames: [{ key: 'chars', frame: 6 }], frameRate: 1 });
+    a.create({ key: 'hero-walk', frames: [{ key: 'chars', frame: 6 }, { key: 'chars', frame: 7 }], frameRate: 8, repeat: -1 });
+    a.create({ key: 'hero-air', frames: [{ key: 'chars', frame: 7 }], frameRate: 1 });
+    a.create({ key: 'spiker', frames: [15, 16, 17].map((frame) => ({ key: 'chars', frame })), frameRate: 6, repeat: -1 });
+    a.create({ key: 'slug', frames: [18, 19, 20].map((frame) => ({ key: 'chars', frame })), frameRate: 5, repeat: -1 });
+    a.create({ key: 'bat', frames: [24, 25, 26].map((frame) => ({ key: 'chars', frame })), frameRate: 8, repeat: -1 });
+
+    this.add.sprite(width / 2, height / 2 - 165, 'chars', 6).setScale(6).play('hero-walk');
+    this.add.text(width / 2, height / 2 - 20, 'STAYING WARM', {
+      fontFamily: 'monospace', fontSize: '52px', color: '#ffd27a',
     }).setOrigin(0.5);
-    this.add.text(width / 2, height / 2 + 30, 'click / tap to start', {
-      fontFamily: 'monospace', fontSize: '20px', color: hex(C.cream),
+    this.add.text(width / 2, height / 2 + 34, 'Carry sparks up the frozen mountain.\nLight every lantern. Stay warm.', {
+      fontFamily: 'monospace', fontSize: '18px', color: '#c9d6ff', align: 'center',
+    }).setOrigin(0.5, 0);
+    const go = this.add.text(width / 2, height / 2 + 120, 'click or tap to start', {
+      fontFamily: 'monospace', fontSize: '22px', color: '#ffffff',
     }).setOrigin(0.5);
-    this.input.once('pointerdown', () => { sfx.pickup(); this.scene.start('Game'); });
+    this.tweens.add({ targets: go, alpha: 0.3, yoyo: true, repeat: -1, duration: 700 });
+    this.add.text(width / 2, height - 22,
+      'Art: Kenney (CC0)   Music: "Snow Theme" by CleytonKauffman (CC0)   Wind: gerardogc2378 (CC0)   Sounds: Kenney (CC0)', {
+        fontFamily: 'monospace', fontSize: '11px', color: '#6f7fae',
+      }).setOrigin(0.5);
+    this.input.once('pointerdown', () => this.scene.start('Game'));
+    this.input.keyboard?.once('keydown', () => this.scene.start('Game'));
   }
 }

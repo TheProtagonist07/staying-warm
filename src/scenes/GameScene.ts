@@ -1,456 +1,549 @@
 import Phaser from 'phaser';
+import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
+import { makeDisc, makeDot, makeRidge } from '../lib/scenery';
 import {
-  makeForeground, makeFog, makeGlow, makeGrain, makeMidground, makeSky, makeSkyline, makeVignette, rng,
-} from '../lib/atmosphere';
-import { makeCharacters } from '../lib/characters';
-import { Creatures } from '../lib/creatures';
-import { makeEnvironment } from '../lib/environment';
-import { Fx } from '../lib/fx';
-import { HERO_SCALE, makeHero } from '../lib/hero';
-import { Life } from '../lib/life';
-import { PX, pixelate } from '../lib/pixel';
-import { sfx } from '../lib/sfx';
-import { CHECKPOINT, EXIT, ORBS, PLATFORMS, SPAWN, WORLD_W } from '../level';
+  BATS, DOOR, FLAGS, GEMS, LANTERNS, PLATFORMS, S, SIGNS, SPARKS, SPAWN, T, WALKERS, WARMTH, WIND,
+  WORLD_H, WORLD_W,
+} from '../level';
 
 const W = 960, H = 540;
-const ACCENTS = [0x4a6bff, 0xff4a3a, 0xff9a3c]; // blue, red, orange; press C to cycle
+const HERO_FRAME = 24;            // size of one character frame in the art
+const DEPTH = { sky: 0, far: 2, near: 4, tiles: 10, props: 12, items: 14, mob: 18, hero: 20, fx: 24, dark: 40, light: 41 };
 
-// Practice game on the look prototype: collect every light orb, then reach the door.
+interface Mob {
+  kind: 'slug' | 'spiker' | 'bat'; sprite: Phaser.GameObjects.Sprite;
+  x0: number; y0: number; minX: number; maxX: number; dir: number; alive: boolean; t: number;
+}
+interface Lantern {
+  x: number; top: number; lit: boolean; power: number; sprite: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image;
+}
+interface Pickup { x: number; y: number; got: boolean; sprite: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image }
+
 export class GameScene extends Phaser.Scene {
-  private solids!: Phaser.Physics.Arcade.StaticGroup;
-  private player!: Phaser.GameObjects.Rectangle;
-  private body!: Phaser.Physics.Arcade.Body;
-  private hero!: Phaser.GameObjects.Sprite;
-  private wasGrounded = true;
-  private playerGlow!: Phaser.GameObjects.Image;
-  private heroShine!: Phaser.GameObjects.Image;
+  private hero!: Phaser.Physics.Arcade.Sprite;
+  private heroGlow!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private fx!: Fx;
-  private life!: Life;
-  private creatures!: Creatures;
-  private orbsLeft: { x: number; y: number }[] = [];
-  private hearts = 3;
-  private heartImgs: Phaser.GameObjects.Image[] = [];
-  private invuln = 0; // ms of safety after being hurt
-  private stun = 0;   // ms without control while knocked back
-  private justLanded = false;
-  private stepT = 0;
-  private trailT = 0;
-  private treeline!: Phaser.GameObjects.TileSprite;
-  private clouds: { img: Phaser.GameObjects.Image; speed: number }[] = [];
-  private tinted: (Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite)[] = [];
-  private accent = 0;
-  private spawn = { ...SPAWN };
-  private orbsGot = 0;
-  private won = false;
+  private touch = { left: false, right: false, jump: false };
+  private jumpWas = false;
+
+  private warmth = WARMTH.max;
+  private sparks = 0;
+  private gemsGot = 0;
+  private freezes = 0;
   private elapsed = 0;
-  private hud!: Phaser.GameObjects.Text;
-  private door!: Phaser.GameObjects.Rectangle;
-  private doorImg!: Phaser.GameObjects.Image;
-  private leaves: { s: Phaser.GameObjects.Image; vy: number; phase: number }[] = [];
-  private lastScrollX = 0;
-  private doorGlow!: Phaser.GameObjects.Image;
+  private won = false;
+  private endAt = 0;
+  private invuln = 0;
+  private stun = 0;
   private coyote = 0;
   private buffer = 0;
-  private jumpCut = false;
+  private stepT = 0;
+  private spawn = { ...SPAWN };
+  private inWind = false;
+  private wasGrounded = true;
+
+  private lanterns: Lantern[] = [];
+  private sparkItems: Pickup[] = [];
+  private gemItems: Pickup[] = [];
+  private mobs: Mob[] = [];
+  private doorSprite!: Phaser.GameObjects.Image;
+  private doorGlow!: Phaser.GameObjects.Image;
+  private flags: Phaser.GameObjects.Image[] = [];
+  private signText: { x: number; top: number; text: Phaser.GameObjects.Text }[] = [];
+
   private far!: Phaser.GameObjects.TileSprite;
-  private mid!: Phaser.GameObjects.TileSprite;
   private near!: Phaser.GameObjects.TileSprite;
-  private fogBack!: Phaser.GameObjects.TileSprite;
-  private fogFront!: Phaser.GameObjects.TileSprite;
   private grain!: Phaser.GameObjects.TileSprite;
-  private dust: { s: Phaser.GameObjects.Image; vx: number; vy: number }[] = [];
+  private stars: { s: Phaser.GameObjects.Image; phase: number }[] = [];
+  private burstE!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private dustE!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private music?: Phaser.Sound.BaseSound;
+  private windSnd?: Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
+
+  private bar!: Phaser.GameObjects.Graphics;
+  private hud!: Phaser.GameObjects.Text;
+  private toast!: Phaser.GameObjects.Text;
+  private toastT = 0;
 
   constructor() { super('Game'); }
 
   create(): void {
-    this.tinted = []; this.dust = []; this.leaves = []; this.clouds = []; this.lastScrollX = 0;
-    this.spawn = { ...SPAWN }; this.orbsGot = 0; this.won = false; this.elapsed = 0;
-    this.orbsLeft = ORBS.map(([x, y]) => ({ x, y })); this.hearts = 3; this.invuln = 0; this.stun = 0;
-    if (!this.textures.exists('grain')) this.buildTextures(); // survive scene.restart()
+    this.warmth = WARMTH.max; this.sparks = 0; this.gemsGot = 0; this.freezes = 0; this.elapsed = 0;
+    this.won = false; this.invuln = 0; this.stun = 0; this.spawn = { ...SPAWN }; this.inWind = false;
+    this.lanterns = []; this.sparkItems = []; this.gemItems = []; this.mobs = []; this.flags = [];
+    this.signText = []; this.stars = []; this.wasGrounded = true; this.toastT = 0; this.jumpWas = false;
+
+    this.buildTextures();
     this.buildBackdrop();
-    this.buildLevel();
-    this.buildPlayer();
-    this.buildPickups();
-    this.fx = new Fx(this);
-    this.life = new Life(this, this.fx);
-    this.creatures = new Creatures(this, this.fx);
+    const solids = this.buildWorld();
+    this.buildItems();
+    this.buildMobs();
+    this.buildHero(solids);
     this.buildAtmosphere();
-    this.hud = this.add.text(20, 18, '', { fontFamily: 'monospace', fontSize: '16px', color: '#9db8ff' })
-      .setScrollFactor(0).setDepth(60);
-    this.heartImgs = [0, 1, 2].map((i) => this.add.image(28 + i * 20, 52, 'heart', 0).setScale(PX)
-      .setScrollFactor(0).setDepth(60));
+    this.buildHud();
+    this.buildInput();
 
-    this.cameras.main.setBounds(0, 0, WORLD_W, H).startFollow(this.player, true, 0.08, 0.08);
-    this.cameras.main.fadeIn(600, 0, 0, 0);
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,C') as typeof this.keys;
-    this.keys.R = this.input.keyboard!.addKey('R');
-    this.keys.C.on('down', () => this.setAccent((this.accent + 1) % ACCENTS.length));
+    this.physics.world.setBounds(0, -400, WORLD_W, WORLD_H + 800);
+    this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H).startFollow(this.hero, true, 0.1, 0.1);
+    this.cameras.main.setDeadzone(60, 80);
+    this.cameras.main.fadeIn(700, 0, 0, 0);
 
-    const hint = this.add.text(W / 2, H - 28, 'A / D move   Space jump   collect every orb, then reach the door   C light', {
-      fontFamily: 'monospace', fontSize: '14px', color: '#6f7fae',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(60);
-    this.tweens.add({ targets: hint, alpha: 0, delay: 6000, duration: 1500 });
+    this.music = this.sound.add('music', { loop: true, volume: 0.32 });
+    this.music.play();
+    this.windSnd = this.sound.add('wind', { loop: true, volume: 0.05 }) as Phaser.Sound.WebAudioSound;
+    this.windSnd.play();
+    this.events.once('shutdown', () => { this.music?.stop(); this.windSnd?.stop(); });
+
+    this.say('The village below is freezing.\nCarry sparks up the mountain and light every lantern.', 6500);
   }
 
+  // ---------- building the scene ----------
+
   private buildTextures(): void {
-    makeSky(this, 'sky', W, H, '#070e26', '#020307');
-    makeSkyline(this, 'far', W, H, 0x0a1230, 3);
-    makeMidground(this, 'mid', W, H, 0x060a17, 5);
-    makeForeground(this, 'near', W, H, 9);
-    // the scenery layers are drawn smooth, then chunked into pixels to match the hero and tiles
-    for (const key of ['far', 'mid', 'near']) pixelate(this, key);
-    makeEnvironment(this);
-    makeCharacters(this);
-    makeFog(this, 'fog', 512, 220);
+    makeDot(this);
+    makeSky(this, 'sky', W, H, '#0a1330', '#1b2a58');
     makeGlow(this, 'glow', 256);
-    makeGlow(this, 'dust', 10);
     makeVignette(this, 'vignette', W, H);
     makeGrain(this, 'grain');
+    makeDisc(this, 'moon', 26, '#e6ecff', '#c3cdf0');
+    makeRidge(this, 'ridge-far', W, H, {
+      base: 220, amp: 160, body: '#2c3f78', snow: '#7a90cc',
+      waves: [[2, 1, 0.3], [3, 0.7, 1.9], [5, 0.4, 4.1]],
+    });
+    makeRidge(this, 'ridge-near', W, H, {
+      base: 110, amp: 120, body: '#0b1230', snow: '#2b3d74',
+      waves: [[3, 1, 2.2], [4, 0.6, 0.7], [7, 0.35, 3.3]],
+    });
   }
 
   private buildBackdrop(): void {
-    const fixed = <T extends Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.ScrollFactor>(o: T) =>
-      o.setScrollFactor(0) as T;
-    fixed(this.add.image(0, 0, 'sky').setOrigin(0, 0).setDepth(0));
-    // the moon, its soft halo, and a few clouds that drift across it.
-    // It sits below the mid layer's pipes (y 86-112) so they don't draw stripes across it.
-    fixed(this.add.image(W * 0.83, 160, 'glow').setScale(4).setTint(0x2c4a9a).setAlpha(0.26)
-      .setBlendMode(Phaser.BlendModes.ADD).setDepth(1));
-    fixed(this.add.image(W * 0.83, 160, 'moon').setScale(PX).setDepth(1));
-    const cr = rng(55);
-    for (let i = 0; i < 5; i++) {
-      const img = fixed(this.add.image(cr() * W, 60 + cr() * 110, i % 2 ? 'cloud1' : 'cloud2').setScale(PX)
-        .setAlpha(0.85).setDepth(1.5));
-      this.clouds.push({ img, speed: 3 + cr() * 6 });
+    const fixed = <O extends Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.ScrollFactor>(o: O) => o.setScrollFactor(0) as O;
+    fixed(this.add.image(0, 0, 'sky').setOrigin(0, 0).setDepth(DEPTH.sky));
+    const r = rng(5);
+    for (let i = 0; i < 80; i++) {
+      const s = fixed(this.add.image(r() * W, r() * H * 0.6, 'dot').setDepth(DEPTH.sky + 0.5)
+        .setAlpha(0.2 + r() * 0.6).setScale(0.5 + r() * 0.6));
+      this.stars.push({ s, phase: r() * 10 });
     }
-    this.far = fixed(this.add.tileSprite(0, 0, W, H, 'far').setOrigin(0, 0).setTileScale(PX).setDepth(2));
-    this.treeline = fixed(this.add.tileSprite(0, 0, W, H, 'treeline').setOrigin(0, 0).setTileScale(PX).setDepth(2.5));
-    this.fogBack = fixed(this.add.tileSprite(0, 270, W, 220, 'fog').setOrigin(0, 0).setDepth(3).setAlpha(0.16));
-    this.mid = fixed(this.add.tileSprite(0, 0, W, H, 'mid').setOrigin(0, 0).setTileScale(PX).setDepth(4));
-    this.tinted.push(this.fogBack);
+    fixed(this.add.image(W * 0.78, 96, 'glow').setScale(3.4).setTint(0x4a62b8).setAlpha(0.3)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.sky + 0.6));
+    fixed(this.add.image(W * 0.78, 96, 'moon').setDepth(DEPTH.sky + 0.7));
+    this.far = fixed(this.add.tileSprite(0, 0, W, H, 'ridge-far').setOrigin(0, 0).setDepth(DEPTH.far));
+    this.near = fixed(this.add.tileSprite(0, 0, W, H, 'ridge-near').setOrigin(0, 0).setDepth(DEPTH.far + 1));
   }
 
-  private buildLevel(): void {
+  /** Tiles, scenery and the invisible collision boxes. Returns the solid group. */
+  private buildWorld(): Phaser.Physics.Arcade.StaticGroup {
     const solids = this.physics.add.staticGroup();
-    for (const [x, top, w] of PLATFORMS) {
-      const h = 800 - top;
-      // collision is one invisible box per platform; the tiles on top are only paint
-      solids.add(this.add.rectangle(x + w / 2, top + h / 2, w, h, 0x000000).setVisible(false));
-      // tilePosition = x / PX keeps the brick pattern lined up from one platform to the next
-      this.add.tileSprite(x, top, w, H - top + 40, 'ground-fill').setOrigin(0, 0).setTileScale(PX)
-        .setTilePosition(x / PX, 0).setDepth(10);
-      // the top strip starts 2 art-pixels above the walkable edge: that space holds grass and leaves
-      this.add.tileSprite(x, top - 2 * PX, w, 8 * PX, 'ground-top').setOrigin(0, 0).setTileScale(PX)
-        .setTilePosition(x / PX, 0).setDepth(11);
-      // dim edge lines so the sides of a block read against the dark
-      this.add.rectangle(x + 1, top + 4 + h / 2, 2, h, 0x1c2745).setDepth(11);
-      this.add.rectangle(x + w - 1, top + 4 + h / 2, 2, h, 0x1c2745).setDepth(11);
+    const r = rng(11);
+    PLATFORMS.forEach((p, n) => {
+      const snowy = p.row <= 17;
+      const left = p.col * T, top = p.row * T, width = p.w * T;
+      // One collision box per platform. The tiles are only paint.
+      solids.add(this.add.rectangle(left + width / 2, top + (WORLD_H - top) / 2 + 200, width, WORLD_H - top + 400).setVisible(false));
+      // Dark mass under the visible tile rows, so the cliff reads against the sky.
+      this.add.rectangle(left + width / 2, top + 4 * T + (WORLD_H - top) / 2, width, WORLD_H - top, 0x0e1428).setDepth(DEPTH.tiles - 1);
+      for (let c = 0; c < p.w; c++) {
+        const first = c === 0, last = c === p.w - 1;
+        const topTile = snowy ? (first ? 80 : last ? 83 : 81 + (c % 2)) : (first ? 0 : last ? 3 : 1 + (c % 2));
+        this.tile(left + c * T, top, topTile, DEPTH.tiles);
+        for (let k = 1; k <= 3; k++) this.tile(left + c * T, top + k * T, [4, 5, 24, 25][Math.floor(r() * 4)]!, DEPTH.tiles);
+      }
+      // A few plain props so the ground isn't bare.
+      if (p.w >= 5 && n > 0) {
+        for (let i = 0; i < Math.floor(p.w / 3); i++) {
+          const kind = [126, 126, 128, 124, 125][Math.floor(r() * 5)]!;
+          this.add.image(left + (1 + r() * (p.w - 2)) * T, top, 'tiles', kind).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props - 1);
+        }
+      }
+    });
+
+    for (const sgn of SIGNS) {
+      this.add.image(sgn.x, sgn.top, 'tiles', 86).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
+      const text = this.add.text(sgn.x, sgn.top - 2 * T - 10, sgn.text, {
+        fontFamily: 'monospace', fontSize: '13px', color: '#101624', backgroundColor: '#e8e2cf',
+        padding: { x: 6, y: 4 }, align: 'center',
+      }).setOrigin(0.5, 1).setDepth(DEPTH.fx).setAlpha(0);
+      this.signText.push({ x: sgn.x, top: sgn.top, text });
     }
-    this.physics.world.setBounds(0, -200, WORLD_W, H + 600);
-    this.solids = solids;
+
+    for (const wz of WIND) {
+      this.add.rectangle(wz.x + wz.w / 2, wz.y + wz.h / 2, wz.w, wz.h, 0x9db8ff, 0.07).setDepth(DEPTH.dark - 1);
+      this.add.particles(0, 0, 'dot', {
+        emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(wz.x, wz.y + wz.h * 0.25, wz.w, wz.h * 0.5), quantity: 1 },
+        lifespan: 700, speedX: { min: -330, max: -240 }, speedY: { min: -10, max: 14 },
+        scaleX: { start: 7, end: 2 }, scaleY: 0.6, alpha: { start: 0.55, end: 0 }, frequency: 45, blendMode: 'ADD',
+      } as Phaser.Types.GameObjects.Particles.ParticleEmitterConfig).setDepth(DEPTH.light);
+    }
+    return solids;
   }
 
-  private buildPlayer(): void {
-    // The physics box is an invisible rectangle; the drawn character just follows it.
-    // That keeps collisions stable while the sprite is free to squash, stretch and flip.
-    this.player = this.add.rectangle(SPAWN.x, SPAWN.y, 14, 26, 0xf2f6ff).setVisible(false);
-    this.physics.add.existing(this.player);
-    makeHero(this);
-    this.hero = this.add.sprite(SPAWN.x, SPAWN.y, 'hero', 0).setOrigin(0.5, 1).setScale(HERO_SCALE).setDepth(20);
+  private tile(x: number, y: number, frame: number, depth: number): void {
+    this.add.image(x, y, 'tiles', frame).setOrigin(0, 0).setScale(S).setDepth(depth);
+  }
+
+  private buildItems(): void {
+    for (const f of FLAGS) {
+      this.flags.push(this.add.image(f.x, f.top, 'tiles', 111).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props));
+    }
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 450, yoyo: true, repeat: -1,
+      onUpdate: (c) => this.flags.forEach((f) => f.setFrame(c.getValue()! > 0.5 ? 112 : 111)),
+    });
+
+    // The door is two tiles tall: 130 on top of 150.
+    this.add.image(DOOR.x, DOOR.top, 'tiles', 150).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
+    this.doorSprite = this.add.image(DOOR.x, DOOR.top - T, 'tiles', 130).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
+    this.doorGlow = this.add.image(DOOR.x, DOOR.top - T, 'glow').setScale(2.6).setTint(0xffd27a)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light).setAlpha(0);
+
+    for (const l of LANTERNS) {
+      const sprite = this.add.image(l.x, l.top, 'tiles', 129).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props).setTint(0x4a5578);
+      const glow = this.add.image(l.x, l.top - T, 'glow').setScale(2.6).setTint(0xffc46a)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light).setAlpha(0);
+      this.lanterns.push({ x: l.x, top: l.top, lit: false, power: 0, sprite, glow });
+    }
+
+    const pickup = (p: { x: number; y: number }, frame: number, tint: number, big: number): Pickup => {
+      const sprite = this.add.image(p.x, p.y, 'tiles', frame).setScale(S).setDepth(DEPTH.items);
+      const glow = this.add.image(p.x, p.y, 'glow').setScale(big).setTint(tint)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light).setAlpha(0.6);
+      this.tweens.add({ targets: [sprite, glow], y: p.y - 6, duration: 900 + Math.random() * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      return { x: p.x, y: p.y, got: false, sprite, glow };
+    };
+    for (const p of SPARKS) this.sparkItems.push(pickup(p, 151, 0xffc46a, 0.55));
+    for (const p of GEMS) this.gemItems.push(pickup(p, 67, 0x6ad0ff, 0.5));
+  }
+
+  private buildMobs(): void {
+    for (const w of WALKERS) {
+      const sprite = this.add.sprite(w.x, w.top, 'chars', 0).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.mob).play(w.kind);
+      this.mobs.push({ kind: w.kind, sprite, x0: w.x, y0: w.top, minX: w.minX, maxX: w.maxX, dir: 1, alive: true, t: 0 });
+    }
+    for (const b of BATS) {
+      const sprite = this.add.sprite(b.x, b.y, 'chars', 24).setScale(S).setDepth(DEPTH.mob).play('bat');
+      this.mobs.push({ kind: 'bat', sprite, x0: b.x, y0: b.y, minX: 0, maxX: 0, dir: 1, alive: true, t: Math.random() * 6 });
+    }
+  }
+
+  private buildHero(solids: Phaser.Physics.Arcade.StaticGroup): void {
+    this.heroGlow = this.add.image(SPAWN.x, SPAWN.y, 'glow').setTint(0xffd9a8).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light);
+    this.hero = this.physics.add.sprite(SPAWN.x, SPAWN.y, 'chars', 6).setScale(S).setDepth(DEPTH.hero);
+    this.hero.body!.setSize(12, 20).setOffset((HERO_FRAME - 12) / 2, 3);
+    this.hero.setCollideWorldBounds(true);
     this.hero.play('hero-idle');
-    this.wasGrounded = true;
-    this.body = this.player.body as Phaser.Physics.Arcade.Body;
-    this.body.setCollideWorldBounds(true);
-    this.physics.add.collider(this.player, this.solids);
-    // halo sits behind the sprite so it lights the air around the hero without washing out the pixels
-    this.playerGlow = this.add.image(0, 0, 'glow').setScale(1.1).setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xffd9a8).setAlpha(0.32).setDepth(19);
-    // the fox's tail tip is its lantern: a small warm glow that follows the tip
-    this.heroShine = this.add.image(0, 0, 'glow').setScale(0.4).setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xffe9a8).setAlpha(0.6).setDepth(21);
-  }
-
-
-  private buildPickups(): void {
-    // orbs: small bright core + additive glow, bobbing gently
-    const orbs = this.physics.add.staticGroup();
-    for (const [x, y] of ORBS) {
-      // the pickup box is an invisible square much bigger than the sprite: near misses should count
-      const core = this.add.rectangle(x, y, 24, 24, 0xffffff).setVisible(false);
-      const gem = this.add.image(x, y, 'orb').setScale(PX).setDepth(14);
-      const glow = this.add.image(x, y, 'glow').setScale(0.6).setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(0x9db8ff).setDepth(14).setAlpha(0.8);
-      this.tweens.add({ targets: [gem, glow], y: y - 6, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      core.setData('parts', [gem, glow]);
-      orbs.add(core);
-    }
-    this.physics.add.overlap(this.player, orbs, (_p, o) => {
-      const core = o as Phaser.GameObjects.Rectangle;
-      for (const part of core.getData('parts') as Phaser.GameObjects.Image[]) part.destroy();
-      core.destroy();
-      this.orbsGot++;
-      this.orbsLeft = this.orbsLeft.filter((o) => o.x !== core.x);
-      this.creatures.celebrate();
-      this.fx.sparks(core.x, core.y, 12, 0x9db8ff);
-      sfx.pickup();
-      if (this.orbsGot === ORBS.length) this.openDoor();
-    });
-
-    // checkpoint beacon: dim until touched, then lights up
-    const cp = this.add.rectangle(CHECKPOINT.x, CHECKPOINT.topY - 14, 4, 28, 0x000000).setVisible(false);
-    const cpImg = this.add.image(CHECKPOINT.x, CHECKPOINT.topY, 'cp-off').setOrigin(0.5, 1).setScale(PX).setDepth(12);
-    const cpGlow = this.add.image(CHECKPOINT.x, CHECKPOINT.topY - 18, 'glow').setScale(0.7)
-      .setBlendMode(Phaser.BlendModes.ADD).setTint(0xffd27a).setDepth(13).setAlpha(0);
-    this.physics.add.existing(cp, true);
-    this.physics.add.overlap(this.player, cp, () => {
-      if (this.spawn.x === CHECKPOINT.x) return;
-      this.spawn = { x: CHECKPOINT.x, y: CHECKPOINT.topY - 40 };
-      cpImg.setTexture('cp-on');
-      this.fx.embers(CHECKPOINT.x, CHECKPOINT.topY - 20, 10);
-      this.tweens.add({ targets: cpGlow, alpha: 0.7, duration: 400 });
-      sfx.win();
-    });
-
-    // exit door: closed (dark) until every orb is collected
-    this.door = this.add.rectangle(EXIT.x, EXIT.topY - 30, 34, 60, 0x000000).setVisible(false);
-    this.doorImg = this.add.image(EXIT.x, EXIT.topY, 'door-closed').setOrigin(0.5, 1).setScale(PX).setDepth(12);
-    this.doorGlow = this.add.image(EXIT.x, EXIT.topY - 30, 'glow').setScale(1.4)
-      .setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe9b0).setDepth(13).setAlpha(0);
-    this.physics.add.existing(this.door, true);
-    this.physics.add.overlap(this.player, this.door, () => {
-      if (this.orbsGot === ORBS.length && !this.won) this.win();
-    });
-  }
-
-  private openDoor(): void {
-    this.doorImg.setTexture('door-open');
-    this.fx.sparks(EXIT.x, EXIT.topY - 30, 18, 0xffe9b0);
-    this.fx.embers(EXIT.x, EXIT.topY - 8, 12);
-    this.tweens.add({ targets: this.doorGlow, alpha: 0.85, duration: 600 });
-    sfx.win();
-  }
-
-  private win(): void {
-    this.won = true;
-    this.hero.play('hero-idle', true);
-    this.body.setVelocity(0, 0);
-    this.body.setAllowGravity(false);
-    const secs = (this.elapsed / 1000).toFixed(1);
-    this.add.rectangle(0, 0, W, H, 0x000000, 0.6).setOrigin(0, 0).setScrollFactor(0).setDepth(70);
-    this.add.text(W / 2, H / 2 - 20, 'LIGHT RESTORED', { fontFamily: 'monospace', fontSize: '44px', color: '#ffe9b0' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(71);
-    this.add.text(W / 2, H / 2 + 34, `${secs}s   press R to play again`, { fontFamily: 'monospace', fontSize: '18px', color: '#9db8ff' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(71);
-    sfx.win();
+    this.physics.add.collider(this.hero, solids);
   }
 
   private buildAtmosphere(): void {
-    this.near = this.add.tileSprite(0, 0, W, H, 'near').setOrigin(0, 0).setTileScale(PX).setScrollFactor(0).setDepth(30);
-    this.fogFront = this.add.tileSprite(0, 330, W, 220, 'fog').setOrigin(0, 0).setScrollFactor(0).setDepth(31).setAlpha(0.07);
-    this.tinted.push(this.fogFront);
+    // Everything is multiplied by a cold blue so the bright art sits in the night; lights are added on top.
+    this.add.rectangle(0, 0, W, H, 0x6a7ab0).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.dark)
+      .setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.add.image(0, 0, 'vignette').setOrigin(0, 0).setScrollFactor(0).setDepth(50);
-    this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setScrollFactor(0).setDepth(51).setAlpha(0.4);
+    this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setScrollFactor(0).setDepth(51).setAlpha(0.28);
 
-    // floating dust motes catching the light
-    const r = rng(33);
-    for (let i = 0; i < 40; i++) {
-      const s = this.add.image(r() * W, r() * H, 'dust').setScrollFactor(0).setDepth(22)
-        .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.15 + r() * 0.35).setScale(0.4 + r() * 0.6);
-      this.dust.push({ s, vx: (r() - 0.5) * 6, vy: -2 - r() * 6 });
-    }
+    this.add.particles(0, 0, 'dot', {
+      x: { min: 0, max: W }, y: -10, lifespan: 7000, speedY: { min: 35, max: 85 }, speedX: { min: -35, max: -10 },
+      scale: { min: 1, max: 2.4 }, alpha: { min: 0.4, max: 0.9 }, frequency: 70,
+    }).setScrollFactor(0).setDepth(DEPTH.fx);
 
-    // falling leaves: a few in front of the hero, the rest behind the platforms
-    for (let i = 0; i < 28; i++) {
-      const s = this.add.image(r() * W, r() * H, `leaf${i % 3}`).setScale(PX).setScrollFactor(0)
-        .setDepth(i % 3 === 0 ? 22 : 8).setAlpha(i % 3 === 0 ? 0.95 : 0.6);
-      this.leaves.push({ s, vy: 14 + r() * 22, phase: r() * 10 });
-    }
-    this.setAccent(0, true);
+    this.burstE = this.add.particles(0, 0, 'dot', {
+      lifespan: { min: 400, max: 900 }, speed: { min: 40, max: 150 }, angle: { min: 0, max: 360 },
+      scale: { start: 3, end: 0 }, alpha: { start: 1, end: 0 }, blendMode: 'ADD', emitting: false,
+    }).setDepth(DEPTH.fx);
+    this.dustE = this.add.particles(0, 0, 'dot', {
+      lifespan: { min: 200, max: 400 }, speed: { min: 8, max: 35 }, angle: { min: 200, max: 340 },
+      scale: { start: 3, end: 0 }, alpha: { start: 0.55, end: 0 }, tint: 0xcfdcff, emitting: false,
+    }).setDepth(DEPTH.fx);
   }
 
-  private setAccent(i: number, silent = false): void {
-    this.accent = i;
-    const c = ACCENTS[i]!;
-    const dim = Phaser.Display.Color.ValueToColor(c).darken(55).color;
-    for (const o of this.tinted) o.setTint(o instanceof Phaser.GameObjects.TileSprite ? dim : c);
-    this.life.setAccent(c);
-    if (!silent) sfx.pickup();
+  private buildHud(): void {
+    this.bar = this.add.graphics().setScrollFactor(0).setDepth(60);
+    this.hud = this.add.text(W - 16, 14, '', { fontFamily: 'monospace', fontSize: '15px', color: '#dfe8ff', align: 'right' })
+      .setOrigin(1, 0).setScrollFactor(0).setDepth(60);
+    this.add.text(16, 8, 'WARMTH', { fontFamily: 'monospace', fontSize: '13px', color: '#ffd27a' }).setScrollFactor(0).setDepth(60);
+    this.toast = this.add.text(W / 2, 90, '', {
+      fontFamily: 'monospace', fontSize: '17px', color: '#ffffff', align: 'center', backgroundColor: '#0a1020cc', padding: { x: 10, y: 6 },
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60).setAlpha(0);
   }
+
+  private buildInput(): void {
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,R,M') as typeof this.keys;
+    if (!this.sys.game.device.input.touch) return;
+    // On-screen buttons for phones and tablets: move on the left, jump on the right.
+    const btn = (x: number, y: number, label: string, key: 'left' | 'right' | 'jump', w = 96) => {
+      const g = this.add.rectangle(x, y, w, 96, 0xffffff, 0.14).setStrokeStyle(2, 0xffffff, 0.4)
+        .setScrollFactor(0).setDepth(70).setInteractive();
+      this.add.text(x, y, label, { fontFamily: 'monospace', fontSize: '34px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(71).setAlpha(0.8);
+      g.on('pointerdown', () => { this.touch[key] = true; g.setFillStyle(0xffffff, 0.3); });
+      const up = () => { this.touch[key] = false; g.setFillStyle(0xffffff, 0.14); };
+      g.on('pointerup', up); g.on('pointerout', up);
+    };
+    btn(80, H - 70, '<', 'left');
+    btn(190, H - 70, '>', 'right');
+    btn(W - 90, H - 70, '^', 'jump', 130);
+  }
+
+  // ---------- messages ----------
+
+  private say(msg: string, ms = 2200): void {
+    this.toast.setText(msg).setAlpha(1);
+    this.toastT = ms;
+  }
+
+  // ---------- per-frame ----------
 
   update(time: number, dt: number): void {
-    // read R every frame, so a press during play can't sit waiting and skip the win screen later
-    const restart = Phaser.Input.Keyboard.JustDown(this.keys.R);
+    const restart = Phaser.Input.Keyboard.JustDown(this.keys.R!);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.M!)) this.sound.mute = !this.sound.mute; // M toggles all sound
     if (this.won) {
-      if (restart) this.scene.restart();
+      if (restart || (this.input.activePointer.isDown && this.time.now > this.endAt)) this.scene.restart();
     } else {
       this.elapsed += dt;
-      this.move(dt);
+      this.moveHero(dt);
+      this.updateWarmth(dt);
+      this.updateMobs(time, dt);
+      this.updatePickups();
     }
+    this.updateLooks(time, dt);
 
-    // parallax: far layers scroll slower than the camera, near layers faster
-    const sx = this.cameras.main.scrollX;
-    // these three layers are drawn at 1/PX size, so their scroll is divided by PX too
-    this.far.tilePositionX = (sx * 0.12) / PX;
-    this.treeline.tilePositionX = (sx * 0.25) / PX;
-    this.mid.tilePositionX = (sx * 0.45) / PX;
-    this.near.tilePositionX = (sx * 1.4) / PX;
-    this.fogBack.tilePositionX = sx * 0.3 + time * 0.012;
-    this.fogFront.tilePositionX = sx * 1.1 - time * 0.02;
-
-    // film grain: jump the tile to a random offset every ~3rd frame
-    if (Math.floor(time / 40) !== Math.floor((time - dt) / 40)) {
-      this.grain.tilePositionX = Math.floor(Math.random() * 128);
-      this.grain.tilePositionY = Math.floor(Math.random() * 128);
+    if (this.toastT > 0) {
+      this.toastT -= dt;
+      if (this.toastT < 400) this.toast.setAlpha(Math.max(0, this.toastT / 400));
     }
-
-    for (const d of this.dust) {
-      d.s.x += d.vx * dt * 0.001; d.s.y += d.vy * dt * 0.001;
-      if (d.s.y < -5) d.s.y = H + 5;
-      if (d.s.x < -5) d.s.x = W + 5; else if (d.s.x > W + 5) d.s.x = -5;
-    }
-
-    // leaves drift down with a side-to-side sway, and slide past as the camera moves
-    const camShift = sx - this.lastScrollX;
-    this.lastScrollX = sx;
-    for (const c of this.clouds) {
-      c.img.x -= c.speed * dt * 0.001 + camShift * 0.04;
-      if (c.img.x < -70) c.img.x += W + 140; else if (c.img.x > W + 70) c.img.x -= W + 140;
-    }
-    for (const l of this.leaves) {
-      l.s.y += l.vy * dt * 0.001;
-      l.s.x += Math.sin(time * 0.0015 + l.phase) * 18 * dt * 0.001 - camShift * 0.9;
-      l.s.setFlipX(Math.sin(time * 0.004 + l.phase) > 0); // flutter
-      if (l.s.y > H + 6) { l.s.y = -6; l.s.x = Math.random() * W; }
-      if (l.s.x < -6) l.s.x += W + 12; else if (l.s.x > W + 6) l.s.x -= W + 12;
-    }
-
-    this.hero.setPosition(this.player.x, this.player.y + 13);
-    // tail tip sits behind the fox and moves with the pose: low on the way up, high on the way down
-    const pose = this.hero.anims.currentAnim?.key;
-    const tipY = pose === 'hero-jump' ? -3 : pose === 'hero-fall' ? -21 : -17;
-    this.heroShine.setPosition(this.hero.x + (this.hero.flipX ? 14 : -14), this.hero.y + tipY)
-      .setAlpha(0.55 + Math.sin(time * 0.006) * 0.1);
-    this.playerGlow.setPosition(this.player.x, this.player.y - 4).setAlpha(0.32 + Math.sin(time * 0.004) * 0.04);
-
-    // the fox's own effects: a ribbon of tail light while moving, and dust from running feet
-    const grounded = this.body.blocked.down || this.body.touching.down;
-    const vx = this.won ? 0 : this.body.velocity.x;
-    this.trailT -= dt;
-    if (this.trailT <= 0 && (Math.abs(vx) > 40 || !grounded)) {
-      this.fx.trail(this.heroShine.x, this.heroShine.y);
-      this.trailT = 45;
-    }
-    this.stepT -= dt;
-    if (this.stepT <= 0 && grounded && Math.abs(vx) > 120) {
-      this.fx.dust(this.hero.x - Math.sign(vx) * 6, this.hero.y, 1);
-      this.stepT = 170;
-    }
-
-    // everything that reacts to the fox
-    this.life.update(time, dt, {
-      x: this.player.x, y: this.player.y, feet: this.body.bottom, vx, grounded, landed: this.justLanded,
-    });
-    this.justLanded = false;
-    // enemies, the companion and the owl
-    if (this.invuln > 0) this.invuln -= dt;
-    this.hero.setAlpha(this.invuln > 0 && Math.floor(time / 70) % 2 ? 0.35 : 1); // blink while safe
-    const hit = this.won ? null : this.creatures.update(time, dt, {
-      x: this.player.x, y: this.player.y, feet: this.body.bottom, vx, vy: this.body.velocity.y, grounded,
-    }, this.orbsLeft);
-    if (hit?.type === 'stomp') {
-      this.body.setVelocityY(-390); // bounce off its head
-      this.jumpCut = true;          // a bounce is always full height, whether or not jump is held
-      this.squash(0.8, 1.2);
-    } else if (hit?.type === 'hurt' && this.invuln <= 0) {
-      this.hurt(hit.fromX);
-    }
-
-    const hud = `orbs ${this.orbsGot}/${ORBS.length}   lanterns ${this.life.lanternsLit}/${this.life.lanternCount}`;
-    if (this.hud.text !== hud) this.hud.setText(hud);
-
-    if (this.player.y > H + 120) this.respawn();
+    if (!this.won && this.hero.y > WORLD_H + 80) this.freeze(true);
   }
 
-  private move(dt: number): void {
+  private moveHero(dt: number): void {
     const k = this.keys;
-    const dir = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
-    const jumpKey = k.SPACE.isDown || k.W.isDown || k.UP.isDown || k.Z.isDown;
-    const jumpPressed = [k.SPACE, k.W, k.UP, k.Z].some((key) => Phaser.Input.Keyboard.JustDown(key));
-    const grounded = this.body.blocked.down || this.body.touching.down;
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    const grounded = body.blocked.down;
+    if (this.stun > 0) { this.stun -= dt; this.pose(0, grounded); return; }
 
-    if (this.stun > 0) { // knocked back: no control until it wears off
-      this.stun -= dt;
-      this.animate(0, grounded);
-      return;
-    }
+    const dir = ((k.D!.isDown || k.RIGHT!.isDown || this.touch.right) ? 1 : 0) - ((k.A!.isDown || k.LEFT!.isDown || this.touch.left) ? 1 : 0);
+    const jumpDown = k.SPACE!.isDown || k.W!.isDown || k.UP!.isDown || k.Z!.isDown || this.touch.jump;
+    const jumpPressed = jumpDown && !this.jumpWas;
+    this.jumpWas = jumpDown;
 
-    // coyote time + jump buffer: forgiveness windows that make jumping feel fair
+    // Cold slows you down a little: below a quarter warmth you move at 75% speed.
+    const speed = 190 * (this.warmth < 25 ? 0.75 : 1);
+    body.setVelocityX(body.velocity.x + (dir * speed - body.velocity.x) * Math.min(1, dt * 0.02));
+
+    // Coyote time and a jump buffer: small forgiveness windows that make jumping feel fair.
     this.coyote = grounded ? 110 : this.coyote - dt;
     this.buffer = jumpPressed ? 120 : this.buffer - dt;
-
-    const target = dir * 175;
-    this.body.setVelocityX(this.body.velocity.x + (target - this.body.velocity.x) * Math.min(1, dt * 0.02));
-
     if (this.buffer > 0 && this.coyote > 0) {
-      this.body.setVelocityY(-470);
-      this.buffer = 0; this.coyote = 0; this.jumpCut = false;
-      this.squash(0.8, 1.2); // stretch tall on take-off
-      this.fx.dust(this.hero.x, this.hero.y, 3);
-      sfx.pickup();
+      body.setVelocityY(-470);
+      this.buffer = 0; this.coyote = 0;
+      this.sound.play('phaseJump1', { volume: 0.28 });
+      this.dustE.emitParticleAt(this.hero.x, this.hero.y + 28, 4);
     }
-    // release early = shorter hop
-    if (!jumpKey && this.body.velocity.y < -150 && !this.jumpCut) {
-      this.body.setVelocityY(this.body.velocity.y * 0.5);
-      this.jumpCut = true;
-    }
-    this.animate(dir, grounded);
-  }
+    if (!jumpDown && body.velocity.y < -150) body.setVelocityY(body.velocity.y * 0.5); // release early = short hop
 
-  /** Picks the animation from what the body is doing, and faces the way we're moving. */
-  private animate(dir: number, grounded: boolean): void {
-    if (dir !== 0) this.hero.setFlipX(dir < 0);
-    const key = !grounded ? (this.body.velocity.y < 0 ? 'hero-jump' : 'hero-fall')
-      : Math.abs(this.body.velocity.x) > 25 ? 'hero-run' : 'hero-idle';
-    this.hero.play(key, true);
-    if (grounded && !this.wasGrounded) { // touchdown: squash wide, kick up dust
-      this.squash(1.2, 0.8);
-      this.fx.dust(this.hero.x, this.hero.y, 5);
-      this.justLanded = true;
-      sfx.land();
+    this.pose(dir, grounded);
+    if (grounded && Math.abs(body.velocity.x) > 90) {
+      this.stepT -= dt;
+      if (this.stepT <= 0) {
+        this.sound.play(`footstep_snow_00${Math.floor(Math.random() * 3)}`, { volume: 0.18 });
+        this.stepT = 270;
+      }
+    }
+    if (grounded && !this.wasGrounded) {
+      this.sound.play('impactSoft_medium_001', { volume: 0.2 });
+      this.dustE.emitParticleAt(this.hero.x, this.hero.y + 28, 5);
     }
     this.wasGrounded = grounded;
   }
 
-  private squash(sx: number, sy: number): void {
-    this.tweens.killTweensOf(this.hero);
-    this.hero.setScale(HERO_SCALE * sx, HERO_SCALE * sy);
-    this.tweens.add({ targets: this.hero, scaleX: HERO_SCALE, scaleY: HERO_SCALE, duration: 160, ease: 'Quad.easeOut' });
+  private pose(dir: number, grounded: boolean): void {
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    if (dir !== 0) this.hero.setFlipX(dir < 0);
+    this.hero.play(!grounded ? 'hero-air' : Math.abs(body.velocity.x) > 30 ? 'hero-walk' : 'hero-idle', true);
   }
 
-  /** Lose a heart, get thrown back from whatever did it, and be safe for a moment. */
+  private updateWarmth(dt: number): void {
+    const s = dt / 1000;
+    this.inWind = WIND.some((w) => this.hero.x > w.x && this.hero.x < w.x + w.w && this.hero.y > w.y && this.hero.y < w.y + w.h);
+    let delta = -(this.inWind ? WARMTH.windDrain : WARMTH.drain);
+    const near = this.lanterns.some((l) => l.lit && Phaser.Math.Distance.Between(this.hero.x, this.hero.y, l.x, l.top - T) < WARMTH.lanternRadius);
+    if (near) delta = WARMTH.regen;
+    this.warmth = Phaser.Math.Clamp(this.warmth + delta * s, 0, WARMTH.max);
+    if (this.warmth <= 0) this.freeze(false);
+  }
+
+  /** Warmth ran out (or you fell): wake up at the last lit lantern. */
+  private freeze(fell: boolean): void {
+    this.freezes++;
+    this.warmth = WARMTH.respawn;
+    this.invuln = 1500; this.stun = 0;
+    this.hero.setVelocity(0, 0);
+    this.hero.setPosition(this.spawn.x, this.spawn.y);
+    this.cameras.main.fadeIn(500, 20, 30, 60);
+    this.sound.play('phaserDown2', { volume: 0.3 });
+    this.say(fell ? 'You slipped.\nBack to the last lantern.' : 'You froze.\nBack to the last lantern.');
+  }
+
   private hurt(fromX: number): void {
-    this.setHearts(this.hearts - 1);
-    if (this.hearts <= 0) { this.respawn(); return; }
-    this.invuln = 1300;
-    this.stun = 260;
-    this.body.setVelocity((this.player.x >= fromX ? 1 : -1) * 230, -290);
-    this.cameras.main.shake(120, 0.006);
-    this.fx.sparks(this.player.x, this.player.y, 8, 0xff5a6a);
-    sfx.hit();
+    if (this.invuln > 0) return;
+    this.warmth = Math.max(0, this.warmth - WARMTH.hit);
+    this.invuln = 1200; this.stun = 240;
+    this.hero.setVelocity((this.hero.x >= fromX ? 1 : -1) * 170, -300);
+    this.cameras.main.shake(110, 0.006);
+    this.burstE.emitParticleAt(this.hero.x, this.hero.y, 8);
+    this.sound.play('lowDown', { volume: 0.35 });
   }
 
-  private setHearts(n: number): void {
-    this.hearts = n;
-    this.heartImgs.forEach((img, i) => img.setFrame(i < n ? 0 : 1));
+  private updateMobs(time: number, dt: number): void {
+    const s = dt / 1000;
+    const hb = this.hero.body as Phaser.Physics.Arcade.Body;
+    for (const m of this.mobs) {
+      if (!m.alive) continue;
+      const sp = m.sprite;
+      if (m.kind === 'bat') {
+        m.t += s;
+        sp.setPosition(m.x0 + Math.sin(m.t * 1.1) * 2.2 * T, m.y0 + Math.sin(m.t * 2.6) * 0.6 * T);
+        sp.setFlipX(Math.cos(m.t * 1.1) < 0);
+      } else {
+        sp.x += m.dir * (m.kind === 'slug' ? 38 : 58) * s;
+        if (sp.x > m.maxX) { sp.x = m.maxX; m.dir = -1; } else if (sp.x < m.minX) { sp.x = m.minX; m.dir = 1; }
+        sp.setFlipX(m.dir < 0);
+      }
+      // Hit boxes are smaller than the art, which is kind to the player. Walkers are hit only by feet
+      // below ~70% of their height, so an ordinary hop clears them; bats use a small box in the middle.
+      const halfW = sp.displayWidth * 0.3;
+      const top = m.kind === 'bat' ? sp.y - sp.displayHeight * 0.3 : sp.y - sp.displayHeight * 0.7;
+      const bottom = m.kind === 'bat' ? sp.y + sp.displayHeight * 0.3 : sp.y;
+      const hit = Math.abs(hb.center.x - sp.x) < hb.halfWidth + halfW && hb.bottom > top && hb.top < bottom;
+      if (!hit) continue;
+      const stomp = m.kind === 'slug' && hb.velocity.y > 40 && hb.bottom < top + 16;
+      if (stomp) {
+        m.alive = false;
+        this.tweens.add({ targets: sp, scaleY: 0.2, alpha: 0, duration: 220, onComplete: () => sp.destroy() });
+        this.hero.setVelocityY(-400);
+        this.burstE.emitParticleAt(sp.x, sp.y - 10, 8);
+        this.sound.play('impactSoft_medium_000', { volume: 0.4 });
+      } else {
+        this.hurt(sp.x);
+      }
+    }
+    if (this.invuln > 0) {
+      this.invuln -= dt;
+      this.hero.setAlpha(Math.floor(time / 70) % 2 ? 0.4 : 1);
+    } else this.hero.setAlpha(1);
   }
 
-  private respawn(): void {
-    this.setHearts(3);
-    this.invuln = 1000;
-    this.stun = 0;
-    this.body.reset(this.spawn.x, this.spawn.y);
-    this.cameras.main.fadeIn(400, 0, 0, 0);
-    sfx.hit();
+  private updatePickups(): void {
+    const hx = this.hero.x, hy = this.hero.y;
+    for (const p of this.sparkItems) {
+      if (p.got || Phaser.Math.Distance.Between(hx, hy, p.sprite.x, p.sprite.y) > 34) continue;
+      p.got = true; p.sprite.destroy(); p.glow.destroy();
+      this.sparks++;
+      this.burstE.emitParticleAt(p.x, p.y, 10);
+      this.sound.play('powerUp3', { volume: 0.35 });
+      this.say('Spark collected.\nWalk up to a lantern to light it.', 1800);
+    }
+    for (const p of this.gemItems) {
+      if (p.got || Phaser.Math.Distance.Between(hx, hy, p.sprite.x, p.sprite.y) > 34) continue;
+      p.got = true; p.sprite.destroy(); p.glow.destroy();
+      this.gemsGot++;
+      this.burstE.setParticleTint(0x6ad0ff);
+      this.burstE.emitParticleAt(p.x, p.y, 14);
+      this.burstE.setParticleTint(0xffffff);
+      this.sound.play('powerUp7', { volume: 0.35 });
+      this.say(`Star shard ${this.gemsGot} of ${GEMS.length}`, 1500);
+    }
+    for (const l of this.lanterns) {
+      if (l.lit || Math.abs(hx - l.x) > 54 || Math.abs(hy - (l.top - T)) > 90) continue;
+      if (this.sparks < 1) {
+        if (this.toastT <= 0) this.say('This lantern is cold.\nFind a spark first.', 1600);
+        continue;
+      }
+      this.sparks--;
+      l.lit = true;
+      this.spawn = { x: l.x, y: l.top - 40 };
+      this.warmth = Math.min(WARMTH.max, this.warmth + 40);
+      this.burstE.setParticleTint(0xffc46a);
+      this.burstE.emitParticleAt(l.x, l.top - T, 18);
+      this.burstE.setParticleTint(0xffffff);
+      this.sound.play('impactBell_heavy_000', { volume: 0.5 });
+      const lit = this.lanterns.filter((q) => q.lit).length;
+      this.say(lit === this.lanterns.length ? 'Every lantern is lit!\nGo to the door.' : `Lantern lit  ${lit} / ${this.lanterns.length}`, 2000);
+    }
+    const allLit = this.lanterns.every((l) => l.lit);
+    if (Math.abs(hx - DOOR.x) < 38 && Math.abs(hy - (DOOR.top - T)) < 70) {
+      if (allLit) this.win();
+      else if (this.toastT <= 0) this.say(`The door is frozen shut.\nLight all ${this.lanterns.length} lanterns first.`, 2000);
+    }
+  }
+
+  private win(): void {
+    this.won = true;
+    this.endAt = this.time.now + 1500;
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0); body.setAllowGravity(false);
+    this.sound.play('pepSound2', { volume: 0.5 });
+    this.burstE.emitParticleAt(DOOR.x, DOOR.top - T, 30);
+    const secs = Math.round(this.elapsed / 1000);
+    const lines = [
+      'WARM AGAIN',
+      '',
+      'The lanterns are burning all the way down the mountain.',
+      'The village will see them.',
+      '',
+      `time ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}    star shards ${this.gemsGot} / ${GEMS.length}    froze ${this.freezes}x`,
+      '',
+      'press R or tap to play again',
+    ];
+    this.add.rectangle(0, 0, W, H, 0x000000, 0.65).setOrigin(0, 0).setScrollFactor(0).setDepth(80);
+    this.add.text(W / 2, H / 2, lines.join('\n'), {
+      fontFamily: 'monospace', fontSize: '20px', color: '#dfe8ff', align: 'center', lineSpacing: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(81);
+  }
+
+  /** Lights, fades and the HUD. */
+  private updateLooks(time: number, dt: number): void {
+    const cam = this.cameras.main;
+    this.far.tilePositionX = cam.scrollX * 0.06; this.far.tilePositionY = cam.scrollY * 0.07;
+    this.near.tilePositionX = cam.scrollX * 0.14; this.near.tilePositionY = cam.scrollY * 0.12;
+    for (const st of this.stars) st.s.setAlpha(0.35 + 0.35 * Math.sin(time * 0.002 + st.phase));
+    if (Math.floor(time / 45) !== Math.floor((time - dt) / 45)) {
+      this.grain.tilePositionX = Math.floor(Math.random() * 128);
+      this.grain.tilePositionY = Math.floor(Math.random() * 128);
+    }
+
+    // The hero's own light shrinks and cools as warmth drops. This is the main way the player sees the meter.
+    const w = this.warmth / WARMTH.max;
+    const cold = this.warmth < 30;
+    this.heroGlow.setPosition(this.hero.x, this.hero.y).setScale(0.7 + w * 1.5).setAlpha(0.18 + w * 0.4);
+    this.heroGlow.setTint(cold ? 0x8fa8ff : 0xffd9a8);
+    this.hero.setTint(cold ? 0xa9bdff : 0xffffff);
+
+    for (const l of this.lanterns) {
+      if (l.lit) {
+        l.power = Math.min(1, l.power + dt / 400);
+        l.sprite.setTint(0xffe9b0);
+        l.glow.setAlpha(l.power * (0.5 + 0.06 * Math.sin(time * 0.01 + l.x)));
+      }
+    }
+    const allLit = this.lanterns.every((l) => l.lit);
+    this.doorGlow.setAlpha(allLit ? 0.55 + 0.08 * Math.sin(time * 0.006) : 0);
+    this.doorSprite.setTint(allLit ? 0xffe9b0 : 0xb4c3ee);
+
+    this.windSnd?.setVolume(this.inWind ? 0.5 : 0.07);
+
+    // Warmth bar: orange when warm, blue when cold.
+    const g = this.bar;
+    g.clear();
+    g.fillStyle(0x0a1020, 0.7).fillRect(14, 26, 184, 16);
+    g.fillStyle(Phaser.Display.Color.GetColor(Math.round(110 + 145 * w), Math.round(120 + 80 * w), Math.round(255 - 150 * w)), 1)
+      .fillRect(16, 28, 180 * w, 12);
+    g.lineStyle(2, this.inWind ? 0x9db8ff : 0xffd27a, 0.9).strokeRect(14, 26, 184, 16);
+    this.hud.setText(`sparks ${this.sparks}\nlanterns ${this.lanterns.filter((l) => l.lit).length} / ${this.lanterns.length}\nshards ${this.gemsGot} / ${GEMS.length}`);
+
+    for (const s of this.signText) {
+      const near = Math.abs(this.hero.x - s.x) < 150 && Math.abs(this.hero.y - s.top) < 120;
+      s.text.setAlpha(Phaser.Math.Clamp(s.text.alpha + (near ? 1 : -1) * dt * 0.006, 0, 1));
+    }
   }
 }

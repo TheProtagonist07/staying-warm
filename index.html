@@ -3,14 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Mini Jam 221</title>
+    <title>Staying Warm</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #120d0a; overflow: hidden; }
+      html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; }
       #app { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
       canvas { touch-action: none; display: block; }
+      /* On a phone held upright the game is tiny: ask for landscape. */
+      #rotate { display: none; position: fixed; top: 0; left: 0; right: 0; padding: 8px; text-align: center;
+        font: 14px monospace; color: #ffd27a; background: #0a1020; z-index: 5; }
+      @media (orientation: portrait) and (pointer: coarse) { #rotate { display: block; } }
     </style>
   </head>
   <body>
+    <div id="rotate">Turn your phone sideways for a bigger view</div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

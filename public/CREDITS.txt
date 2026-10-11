@@ -1,0 +1,23 @@
+STAYING WARM - credits
+
+Game by Shivam Chaurasia (TheProtagonist07).
+Made with Phaser 3 and TypeScript.
+
+Art
+  "Pixel Platformer" by Kenney (www.kenney.nl) - CC0 1.0 (public domain)
+  https://kenney.nl/assets/pixel-platformer
+
+Music
+  "Snow Theme" by CleytonKauffman - CC0 1.0 (public domain)
+  https://opengameart.org/content/snow-theme
+
+Ambience
+  "Winter Wind" by gerardogc2378 - CC0 1.0 (public domain)
+  https://opengameart.org/content/winter-wind
+
+Sound effects
+  "Digital Audio" and "Impact Sounds" by Kenney (www.kenney.nl) - CC0 1.0 (public domain)
+  https://kenney.nl/assets/digital-audio
+  https://kenney.nl/assets/impact-sounds
+
+Lighting, fog, mountains, stars, particles, the moon and the film grain are drawn by the game's code.
