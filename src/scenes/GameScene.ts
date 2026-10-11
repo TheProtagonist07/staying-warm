@@ -477,9 +477,11 @@ export class GameScene extends Phaser.Scene {
 
   private hurt(fromX: number): void {
     if (this.invuln > 0) return;
-    this.warmth = Math.max(0, this.warmth - WARMTH.hit);
-    this.invuln = 1200; this.stun = 240;
-    this.hero.setVelocity((this.hero.x >= fromX ? 1 : -1) * 170, -300);
+    // An enemy can chill you but never freeze you outright (that takes the wind, or running out of lanterns),
+    // and the knock-back is a small hop, so a hit cannot throw you off a ledge.
+    this.warmth = Math.max(Math.min(this.warmth, 12), this.warmth - WARMTH.hit);
+    this.invuln = 1600; this.stun = 160;
+    this.hero.setVelocity((this.hero.x >= fromX ? 1 : -1) * 70, -280);
     this.cameras.main.shake(110, 0.006);
     this.burstE.emitParticleAt(this.hero.x, this.hero.y, 8);
     this.sound.play('lowDown', { volume: 0.35 });
