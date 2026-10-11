@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
 import { makeDot, makeDisc, makePines, makeRibbon, makeRidge } from '../lib/scenery';
+import { loadSave } from '../lib/save';
 import { FONT_BODY, FONT_TITLE } from '../lib/ui';
 
 const W = 960, H = 540;
@@ -71,15 +72,24 @@ export class TitleScene extends Phaser.Scene {
       fontFamily: FONT_BODY, fontSize: '25px', color: '#dfe8ff', align: 'center', lineSpacing: 6,
     }).setOrigin(0.5, 0);
 
-    const begin = this.add.text(W / 2, 330, '[ Begin ]', { fontFamily: FONT_TITLE, fontSize: '29px', color: '#ffffff' })
+    const save = loadSave();
+    const begin = this.add.text(W / 2, save.chapter > 0 ? 312 : 330, '[ Begin ]', { fontFamily: FONT_TITLE, fontSize: '29px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.tweens.add({ targets: begin, scale: 1.06, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
     begin.on('pointerover', () => begin.setColor('#ffd27a')).on('pointerout', () => begin.setColor('#ffffff'));
     begin.on('pointerdown', () => this.start());
-    const how = this.add.text(W / 2, 384, 'how to play', { fontFamily: FONT_BODY, fontSize: '28px', color: '#9db8ff' })
+    if (save.chapter > 0) {
+      // You have played before: offer to carry on from the chapter you reached.
+      const names = ['', 'Chapter 2: The Cold Road', 'Chapter 3: The Hearth Rise', 'The Great Hearth'];
+      const cont = this.add.text(W / 2, 358, `[ Continue  ${names[save.chapter]} ]`, { fontFamily: FONT_BODY, fontSize: '28px', color: '#9db8ff' })
+        .setOrigin(0.5).setInteractive({ useHandCursor: true });
+      cont.on('pointerover', () => cont.setColor('#ffd27a')).on('pointerout', () => cont.setColor('#9db8ff'));
+      cont.on('pointerdown', () => this.start(save.chapter));
+    }
+    const how = this.add.text(W / 2, save.chapter > 0 ? 404 : 384, 'how to play', { fontFamily: FONT_BODY, fontSize: '28px', color: '#9db8ff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
     how.on('pointerdown', () => this.help.setVisible(!this.help.visible));
-    this.add.text(W / 2, 414, 'press Enter or Space to begin   M to mute', { fontFamily: FONT_BODY, fontSize: '19px', color: '#6f7fae' }).setOrigin(0.5);
+    this.add.text(W / 2, save.chapter > 0 ? 434 : 414, 'press Enter or Space to begin   M to mute', { fontFamily: FONT_BODY, fontSize: '19px', color: '#6f7fae' }).setOrigin(0.5);
 
     const panel = this.add.rectangle(W / 2, 270, 560, 230, 0x080d1c, 0.95).setStrokeStyle(2, 0x4a5c99);
     const text = this.add.text(W / 2, 270,
@@ -101,12 +111,15 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.fadeIn(900, 0, 0, 0);
   }
 
-  private start(): void {
+  private start(chapter = 0): void {
     if (this.starting) return;
     this.starting = true;
     this.sound.play('powerUp3', { volume: 0.3 });
     this.cameras.main.fadeOut(700, 0, 0, 0);
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Game', { level: 0, prologue: true }));
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      if (chapter >= 3) this.scene.start('Hearth');
+      else this.scene.start('Game', { level: chapter, prologue: chapter === 0 });
+    });
   }
 
   update(time: number, dt: number): void {

@@ -25,7 +25,9 @@ Emberfall is freezing. The Great Hearth at the top of Mount Hollow has gone out,
 - Move: A / D or arrow keys
 - Jump: Space, W or Z (hold for a higher jump)
 - Talk / continue: Space, Enter, Z or click
+- Pause: Esc or P (or the II button)
 - Mute: M
+- Your progress is saved in the browser: use Continue on the title screen.
 - Phones and tablets: on-screen buttons. Landscape works best.
 
 **For the jam**
