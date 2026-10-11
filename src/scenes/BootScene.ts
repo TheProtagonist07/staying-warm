@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { loadFonts } from '../lib/ui';
 
 const A = 'assets/audio/';
 
@@ -30,6 +31,7 @@ export class BootScene extends Phaser.Scene {
     a.create({ key: 'slug', frames: [18, 19, 20].map((frame) => ({ key: 'chars', frame })), frameRate: 5, repeat: -1 });
     a.create({ key: 'bat', frames: [24, 25, 26].map((frame) => ({ key: 'chars', frame })), frameRate: 8, repeat: -1 });
 
-    this.scene.start('Title');
+    // Text drawn before the fonts arrive would use the fallback, so wait for them.
+    void loadFonts().then(() => this.scene.start('Title'));
   }
 }

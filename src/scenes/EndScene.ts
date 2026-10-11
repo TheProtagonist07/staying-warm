@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
 import { makeDot, makeRibbon } from '../lib/scenery';
 import { THANKS } from '../lib/story';
+import { FONT_BODY, FONT_TITLE } from '../lib/ui';
 
 const W = 960, H = 540;
 
@@ -43,16 +44,16 @@ export class EndScene extends Phaser.Scene {
     const s = (this.registry.get('stats') ?? { time: 0, gems: 0, freezes: 0, gemsTotal: 0 }) as
       { time: number; gems: number; freezes: number; gemsTotal: number };
     const secs = Math.round(s.time / 1000);
-    this.add.text(W / 2, 90, 'THE END', { fontFamily: 'monospace', fontSize: '60px', color: '#fff1d6' }).setOrigin(0.5);
-    this.add.text(W / 2, 150, 'Emberfall is warm again.', { fontFamily: 'monospace', fontSize: '22px', color: '#ffe0b0', fontStyle: 'italic' }).setOrigin(0.5);
+    this.add.text(W / 2, 90, 'THE END', { fontFamily: FONT_TITLE, fontSize: '51px', color: '#fff1d6' }).setOrigin(0.5);
+    this.add.text(W / 2, 150, 'Emberfall is warm again.', { fontFamily: FONT_BODY, fontSize: '31px', color: '#ffe0b0', fontStyle: 'italic' }).setOrigin(0.5);
     this.add.text(W / 2, 214,
       `time  ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}      star shards  ${s.gems} / ${s.gemsTotal}      times frozen  ${s.freezes}`, {
-        fontFamily: 'monospace', fontSize: '17px', color: '#ffffff',
+        fontFamily: FONT_BODY, fontSize: '26px', color: '#ffffff',
       }).setOrigin(0.5);
-    this.add.text(W / 2, 262, `${THANKS}\n\nArt and sound effects: Kenney (CC0)\nMusic: "Snow Theme" by CleytonKauffman (CC0)\nWind: "Winter Wind" by gerardogc2378 (CC0)\nMade with Phaser 3. Mini Jam 221: Staying Warm.`, {
-      fontFamily: 'monospace', fontSize: '14px', color: '#ffe9d0', align: 'center', lineSpacing: 5,
+    this.add.text(W / 2, 262, `${THANKS}\n\nArt, fonts and sound effects: Kenney (CC0)\nMusic: "Snow Theme" by CleytonKauffman (CC0)\nWind: "Winter Wind" by gerardogc2378 (CC0)\nMade with Phaser 3. Mini Jam 221: Staying Warm.`, {
+      fontFamily: FONT_BODY, fontSize: '22px', color: '#ffe9d0', align: 'center', lineSpacing: 5,
     }).setOrigin(0.5, 0);
-    const again = this.add.text(W / 2, H - 120, '[ play again ]', { fontFamily: 'monospace', fontSize: '24px', color: '#ffffff' })
+    const again = this.add.text(W / 2, H - 120, '[ play again ]', { fontFamily: FONT_BODY, fontSize: '34px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
     this.tweens.add({ targets: again, alpha: 1, delay: 1800, duration: 600, onComplete: () => { this.canLeave = true; } });
     again.on('pointerdown', () => this.leave());

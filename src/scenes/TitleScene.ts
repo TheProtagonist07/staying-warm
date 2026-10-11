@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
 import { makeDot, makeDisc, makePines, makeRibbon, makeRidge } from '../lib/scenery';
+import { FONT_BODY, FONT_TITLE } from '../lib/ui';
 
 const W = 960, H = 540;
 
@@ -62,35 +63,35 @@ export class TitleScene extends Phaser.Scene {
     this.grain = this.add.tileSprite(0, 0, W, H, 'grain').setOrigin(0, 0).setAlpha(0.25);
 
     // Title and story.
-    this.add.text(W / 2 + 2, 82, 'STAYING WARM', { fontFamily: 'monospace', fontSize: '64px', color: '#2a1608' }).setOrigin(0.5);
-    const title = this.add.text(W / 2, 80, 'STAYING WARM', { fontFamily: 'monospace', fontSize: '64px', color: '#ffd27a' }).setOrigin(0.5);
+    this.add.text(W / 2 + 2, 82, 'STAYING WARM', { fontFamily: FONT_TITLE, fontSize: '54px', color: '#2a1608' }).setOrigin(0.5);
+    const title = this.add.text(W / 2, 80, 'STAYING WARM', { fontFamily: FONT_TITLE, fontSize: '54px', color: '#ffd27a' }).setOrigin(0.5);
     this.tweens.add({ targets: title, alpha: 0.82, yoyo: true, repeat: -1, duration: 1400, ease: 'Sine.easeInOut' });
-    this.add.text(W / 2, 134, 'A lamplighter\'s climb', { fontFamily: 'monospace', fontSize: '20px', color: '#b9c6ee', fontStyle: 'italic' }).setOrigin(0.5);
+    this.add.text(W / 2, 134, 'A lamplighter\'s climb', { fontFamily: FONT_BODY, fontSize: '28px', color: '#b9c6ee', fontStyle: 'italic' }).setOrigin(0.5);
     this.add.text(W / 2, 192, 'The frost came early to Emberfall, and the Great Hearth went out.\nClimb Mount Hollow, light every lantern on the way,\nand carry a spark of warmth to the top.', {
-      fontFamily: 'monospace', fontSize: '16px', color: '#dfe8ff', align: 'center', lineSpacing: 6,
+      fontFamily: FONT_BODY, fontSize: '25px', color: '#dfe8ff', align: 'center', lineSpacing: 6,
     }).setOrigin(0.5, 0);
 
-    const begin = this.add.text(W / 2, 330, '[ Begin ]', { fontFamily: 'monospace', fontSize: '34px', color: '#ffffff' })
+    const begin = this.add.text(W / 2, 330, '[ Begin ]', { fontFamily: FONT_TITLE, fontSize: '29px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.tweens.add({ targets: begin, scale: 1.06, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
     begin.on('pointerover', () => begin.setColor('#ffd27a')).on('pointerout', () => begin.setColor('#ffffff'));
     begin.on('pointerdown', () => this.start());
-    const how = this.add.text(W / 2, 384, 'how to play', { fontFamily: 'monospace', fontSize: '18px', color: '#9db8ff' })
+    const how = this.add.text(W / 2, 384, 'how to play', { fontFamily: FONT_BODY, fontSize: '28px', color: '#9db8ff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
     how.on('pointerdown', () => this.help.setVisible(!this.help.visible));
-    this.add.text(W / 2, 414, 'press Enter or Space to begin   M to mute', { fontFamily: 'monospace', fontSize: '12px', color: '#6f7fae' }).setOrigin(0.5);
+    this.add.text(W / 2, 414, 'press Enter or Space to begin   M to mute', { fontFamily: FONT_BODY, fontSize: '19px', color: '#6f7fae' }).setOrigin(0.5);
 
     const panel = this.add.rectangle(W / 2, 270, 560, 230, 0x080d1c, 0.95).setStrokeStyle(2, 0x4a5c99);
     const text = this.add.text(W / 2, 270,
       'A / D or arrow keys   walk\nSpace, W or Z   jump (hold for higher)\n\nYour warmth drains all the time, and fast in cold wind.\nStand near a lit lantern to warm up.\nWalk a spark up to a lantern to light it.\nLight every lantern to open the door.\nLand on slugs. Avoid spikes and bats.\n\nPhone or tablet: use the on-screen buttons.',
-      { fontFamily: 'monospace', fontSize: '15px', color: '#e8eefc', align: 'center', lineSpacing: 4 }).setOrigin(0.5);
-    const close = this.add.text(W / 2 + 255, 168, 'x', { fontFamily: 'monospace', fontSize: '22px', color: '#ffd27a' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      { fontFamily: FONT_BODY, fontSize: '23px', color: '#e8eefc', align: 'center', lineSpacing: 4 }).setOrigin(0.5);
+    const close = this.add.text(W / 2 + 255, 168, 'x', { fontFamily: FONT_BODY, fontSize: '31px', color: '#ffd27a' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     close.on('pointerdown', () => this.help.setVisible(false));
     this.help = this.add.container(0, 0, [panel, text, close]).setDepth(20).setVisible(false);
 
     this.add.text(W / 2, H - 14,
-      'Art & sound: Kenney (CC0)   Music: "Snow Theme" by CleytonKauffman (CC0)   Wind: gerardogc2378 (CC0)', {
-        fontFamily: 'monospace', fontSize: '11px', color: '#7f8fc0',
+      'Art, fonts & sound: Kenney (CC0)   Music: "Snow Theme" by CleytonKauffman (CC0)   Wind: gerardogc2378 (CC0)', {
+        fontFamily: FONT_BODY, fontSize: '17px', color: '#7f8fc0',
       }).setOrigin(0.5);
 
     const kb = this.input.keyboard!;

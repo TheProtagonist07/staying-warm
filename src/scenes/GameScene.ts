@@ -5,6 +5,7 @@ import { makeDisc, makeDot, makeFrost, makePines, makeRibbon, makeRidge } from '
 import { CHAPTER_INTRO, CHAPTER_OUTRO, NPC_SCENES, PROLOGUE } from '../lib/story';
 import { LEVELS, S, T, WARMTH, buildLevel } from '../level';
 import type { BuiltLevel } from '../level';
+import { FONT_BODY, FONT_TITLE } from '../lib/ui';
 
 const W = 960, H = 540;
 const HERO_FRAME = 24;            // size of one character frame in the art
@@ -204,7 +205,7 @@ export class GameScene extends Phaser.Scene {
     for (const sgn of lv.signs) {
       this.add.image(sgn.x, sgn.top, 'tiles', 86).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.props);
       const text = this.add.text(sgn.x, sgn.top - 2 * T - 10, sgn.text, {
-        fontFamily: 'monospace', fontSize: '13px', color: '#101624', backgroundColor: '#e8e2cf',
+        fontFamily: FONT_BODY, fontSize: '20px', color: '#101624', backgroundColor: '#e8e2cf',
         padding: { x: 6, y: 4 }, align: 'center',
       }).setOrigin(0.5, 1).setDepth(DEPTH.fx).setAlpha(0);
       this.signText.push({ x: sgn.x, top: sgn.top, text });
@@ -268,7 +269,7 @@ export class GameScene extends Phaser.Scene {
     for (const n of lv.npcs) {
       const sprite = this.add.sprite(n.x, n.top, 'chars', frames[n.id] ?? 0).setOrigin(0.5, 1).setScale(S).setDepth(DEPTH.mob - 1);
       this.tweens.add({ targets: sprite, y: n.top - 3, yoyo: true, repeat: -1, duration: 800, ease: 'Sine.easeInOut' });
-      const mark = this.add.text(n.x, n.top - 66, '!', { fontFamily: 'monospace', fontSize: '24px', color: '#ffd27a', fontStyle: 'bold' })
+      const mark = this.add.text(n.x, n.top - 66, '!', { fontFamily: FONT_BODY, fontSize: '34px', color: '#ffd27a', fontStyle: 'bold' })
         .setOrigin(0.5).setDepth(DEPTH.fx);
       this.tweens.add({ targets: mark, y: n.top - 74, yoyo: true, repeat: -1, duration: 500 });
       this.npcs.push({ x: n.x, top: n.top, id: n.id, sprite, mark, done: false });
@@ -340,12 +341,12 @@ export class GameScene extends Phaser.Scene {
 
   private buildHud(): void {
     this.bar = this.add.graphics().setScrollFactor(0).setDepth(60);
-    this.hud = this.add.text(W - 16, 14, '', { fontFamily: 'monospace', fontSize: '15px', color: '#dfe8ff', align: 'right' })
+    this.hud = this.add.text(W - 16, 14, '', { fontFamily: FONT_BODY, fontSize: '23px', color: '#dfe8ff', align: 'right' })
       .setOrigin(1, 0).setScrollFactor(0).setDepth(60);
-    this.add.text(16, 8, 'WARMTH', { fontFamily: 'monospace', fontSize: '13px', color: '#ffd27a' }).setScrollFactor(0).setDepth(60);
-    this.add.text(16, 48, `${this.idx + 1}/3  ${this.lv.def.name}`, { fontFamily: 'monospace', fontSize: '12px', color: '#9db8ff' }).setScrollFactor(0).setDepth(60);
+    this.add.text(16, 8, 'WARMTH', { fontFamily: FONT_BODY, fontSize: '20px', color: '#ffd27a' }).setScrollFactor(0).setDepth(60);
+    this.add.text(16, 48, `${this.idx + 1}/3  ${this.lv.def.name}`, { fontFamily: FONT_BODY, fontSize: '19px', color: '#9db8ff' }).setScrollFactor(0).setDepth(60);
     this.toast = this.add.text(W / 2, 90, '', {
-      fontFamily: 'monospace', fontSize: '17px', color: '#ffffff', align: 'center', backgroundColor: '#0a1020cc', padding: { x: 10, y: 6 },
+      fontFamily: FONT_BODY, fontSize: '26px', color: '#ffffff', align: 'center', backgroundColor: '#0a1020cc', padding: { x: 10, y: 6 },
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60).setAlpha(0);
   }
 
@@ -356,7 +357,7 @@ export class GameScene extends Phaser.Scene {
     const btn = (x: number, y: number, label: string, key: 'left' | 'right' | 'jump', w = 96) => {
       const g = this.add.rectangle(x, y, w, 96, 0xffffff, 0.14).setStrokeStyle(2, 0xffffff, 0.4)
         .setScrollFactor(0).setDepth(70).setInteractive();
-      this.add.text(x, y, label, { fontFamily: 'monospace', fontSize: '34px', color: '#ffffff' })
+      this.add.text(x, y, label, { fontFamily: FONT_TITLE, fontSize: '29px', color: '#ffffff' })
         .setOrigin(0.5).setScrollFactor(0).setDepth(71).setAlpha(0.8);
       g.on('pointerdown', () => { this.touch[key] = true; g.setFillStyle(0xffffff, 0.3); });
       const up = () => { this.touch[key] = false; g.setFillStyle(0xffffff, 0.14); };
@@ -544,7 +545,10 @@ export class GameScene extends Phaser.Scene {
 
   private updateNpcs(): void {
     for (const n of this.npcs) {
-      if (n.done || Math.abs(this.hero.x - n.x) > 90 || Math.abs(this.hero.y - (n.top - 30)) > 80) continue;
+      // Only start a talk when the hero is standing on the ground next to them. Starting it mid-jump
+      // used to freeze the hero over a gap and drop it into the pit.
+      const standing = (this.hero.body as Phaser.Physics.Arcade.Body).blocked.down;
+      if (n.done || !standing || Math.abs(this.hero.x - n.x) > 70 || Math.abs(this.hero.y - (n.top - 30)) > 50) continue;
       n.done = true;
       n.mark.setVisible(false);
       n.sprite.setFlipX(this.hero.x < n.x);
@@ -618,22 +622,12 @@ export class GameScene extends Phaser.Scene {
     const last = this.idx === LEVELS.length - 1;
 
     this.dialog.show(CHAPTER_OUTRO[this.idx]!, () => {
-      if (last) {
-        this.cameras.main.fadeOut(1400, 255, 240, 210);
-        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('End'));
-      } else {
-        this.cameras.main.fadeOut(800, 0, 0, 0);
-        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart({ level: this.idx + 1 }));
-      }
-    }, last ? (i) => {
-      // At the Hearth, the moment it catches: a flash of light.
-      if (i === 3) {
-        this.cameras.main.flash(900, 255, 220, 150);
-        this.burstE.emitParticleAt(this.lv.door.x, this.lv.door.top - 2 * T, 60);
-        this.sound.play('impactBell_heavy_000', { volume: 0.7 });
-        this.doorGlow.setScale(6);
-      }
-    } : undefined);
+      this.cameras.main.fadeOut(last ? 1000 : 800, last ? 255 : 0, last ? 240 : 0, last ? 210 : 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        if (last) this.scene.start('Hearth');   // the last stage is a short mini game at the summit
+        else this.scene.restart({ level: this.idx + 1 });
+      });
+    });
   }
 
   /** Lights, fades and the HUD. */
