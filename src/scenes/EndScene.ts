@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
 import { makeDot, makeRibbon } from '../lib/scenery';
+import { loadSave, writeSave } from '../lib/save';
 import { THANKS } from '../lib/story';
 import { FONT_BODY, FONT_TITLE } from '../lib/ui';
 
@@ -44,16 +45,26 @@ export class EndScene extends Phaser.Scene {
     const s = (this.registry.get('stats') ?? { time: 0, gems: 0, freezes: 0, gemsTotal: 0 }) as
       { time: number; gems: number; freezes: number; gemsTotal: number };
     const secs = Math.round(s.time / 1000);
+    const before = loadSave().best;
+    const isBest = secs > 0 && (before === 0 || secs < before);
+    writeSave({ chapter: 0, best: isBest ? secs : before }); // finished: next time starts fresh, the best time stays
+    const bestSecs = isBest ? secs : before;
     this.add.text(W / 2, 90, 'THE END', { fontFamily: FONT_TITLE, fontSize: '51px', color: '#fff1d6' }).setOrigin(0.5);
     this.add.text(W / 2, 150, 'Emberfall is warm again.', { fontFamily: FONT_BODY, fontSize: '31px', color: '#ffe0b0', fontStyle: 'italic' }).setOrigin(0.5);
     this.add.text(W / 2, 214,
       `time  ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}      star shards  ${s.gems} / ${s.gemsTotal}      times frozen  ${s.freezes}`, {
         fontFamily: FONT_BODY, fontSize: '26px', color: '#ffffff',
       }).setOrigin(0.5);
-    this.add.text(W / 2, 262, `${THANKS}\n\nArt, fonts and sound effects: Kenney (CC0)\nMusic: "Snow Theme" by CleytonKauffman (CC0)\nWind: "Winter Wind" by gerardogc2378 (CC0)\nMade with Phaser 3. Mini Jam 221: Staying Warm.`, {
-      fontFamily: FONT_BODY, fontSize: '22px', color: '#ffe9d0', align: 'center', lineSpacing: 5,
+    if (bestSecs > 0) {
+      this.add.text(W / 2, 238, isBest ? 'a new best time!' : `best  ${Math.floor(bestSecs / 60)}:${String(bestSecs % 60).padStart(2, '0')}`, {
+        fontFamily: FONT_BODY, fontSize: '24px', color: isBest ? '#ffd27a' : '#ffe0b0',
+      }).setOrigin(0.5);
+    }
+    this.add.rectangle(W / 2, 345, 640, 148, 0x1a0e24, 0.6).setStrokeStyle(2, 0xffd9a0, 0.5);
+    this.add.text(W / 2, 282, `${THANKS}\n\nArt, fonts and sound effects: Kenney (CC0)\nMusic: "Snow Theme" by CleytonKauffman (CC0)\nWind: "Winter Wind" by gerardogc2378 (CC0)\nMade with Phaser 3. Mini Jam 221: Staying Warm.`, {
+      fontFamily: FONT_BODY, fontSize: '20px', color: '#fff4e0', align: 'center', lineSpacing: 2,
     }).setOrigin(0.5, 0);
-    const again = this.add.text(W / 2, H - 120, '[ play again ]', { fontFamily: FONT_BODY, fontSize: '34px', color: '#ffffff' })
+    const again = this.add.text(W / 2, 438, '[ play again ]', { fontFamily: FONT_BODY, fontSize: '34px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
     this.tweens.add({ targets: again, alpha: 1, delay: 1800, duration: 600, onComplete: () => { this.canLeave = true; } });
     again.on('pointerdown', () => this.leave());

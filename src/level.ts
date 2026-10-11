@@ -57,7 +57,7 @@ export const LEVELS: LevelDef[] = [
     grass: 0xffffff,
     weather: 'snow',
     segs: [
-      { w: 9, gap: 0, rise: 0, items: [['spark', 6], ['sign', 2, 0, 'Cold wind ahead.\nWarmth drains fast out there.']] },
+      { w: 9, gap: 0, rise: 0, items: [['spark', 6], ['sign', 3.5, 0, 'Cold wind ahead.\nWarmth drains fast out there.']] },
       { w: 5, gap: 2, rise: 0, wind: true, items: [['lantern', 2]] },
       { w: 6, gap: 2, rise: -2, items: [['spark', 3], ['slug', 3.5]] },
       { w: 5, gap: 2, rise: 0, wind: true, items: [['gem', 2, 2.8]] },

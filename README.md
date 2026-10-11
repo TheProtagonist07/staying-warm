@@ -2,7 +2,7 @@
 
 A short cold-night platformer made for Mini Jam 221 (limitation: "Staying Warm"). Carry sparks up a frozen mountain, light every lantern, and keep your warmth from running out.
 
-Play: A/D or arrows to move, Space/W/Z to jump, M to mute, R to restart after winning. Touch controls appear on phones and tablets.
+Play: A/D or arrows to move, Space/W/Z to jump, Esc or P to pause, M to mute. Touch controls appear on phones and tablets.
 
 ## How it plays
 Three chapters plus a final stage (about 12 to 17 minutes with the story): The Orchard Path, The Cold Road, The Hearth Rise, and a short ember-catching mini game at the Great Hearth. A title page and prologue set it up, short scenes on the road add story, and an ending closes it.

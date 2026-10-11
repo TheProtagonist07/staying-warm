@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeSky, makeVignette, rng } from '../lib/atmosphere';
 import { Dialog } from '../lib/dialog';
+import { loadSave, writeSave } from '../lib/save';
 import { makeDisc, makeDot, makeFrost, makePines, makeRibbon, makeRidge } from '../lib/scenery';
 import { CHAPTER_INTRO, CHAPTER_OUTRO, NPC_SCENES, PROLOGUE } from '../lib/story';
 import { LEVELS, S, T, WARMTH, buildLevel } from '../level';
@@ -55,6 +56,12 @@ export class GameScene extends Phaser.Scene {
   private inWind = false;
   private wasGrounded = true;
   private launched = false;   // true while a spring is carrying you up
+  private lookAhead = 0;       // camera leans the way you are running
+  private lowWarned = false;   // the low-warmth warning plays once per dip
+  private musicVol = 0.32;
+  private hudIcons: Phaser.GameObjects.Image[] = [];
+  private hudTxt: Phaser.GameObjects.Text[] = [];
+  private card!: Phaser.GameObjects.Container;
 
   private lanterns: Lantern[] = [];
   private sparkItems: Pickup[] = [];
@@ -81,7 +88,6 @@ export class GameScene extends Phaser.Scene {
   private windSnd?: Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
 
   private bar!: Phaser.GameObjects.Graphics;
-  private hud!: Phaser.GameObjects.Text;
   private toast!: Phaser.GameObjects.Text;
   private toastT = 0;
 
@@ -99,6 +105,8 @@ export class GameScene extends Phaser.Scene {
     this.lanterns = []; this.sparkItems = []; this.gemItems = []; this.mobs = []; this.flags = []; this.springs = [];
     this.npcs = []; this.signText = []; this.stars = []; this.ribbons = []; this.flies = [];
     this.wasGrounded = true; this.launched = false; this.toastT = 0; this.jumpWas = false;
+    this.lookAhead = 0; this.lowWarned = false; this.musicVol = 0.32;
+    writeSave({ chapter: Math.max(loadSave().chapter, this.idx) }); // remember how far you got
     if (this.idx === 0 && this.prologue) this.registry.set('stats', { time: 0, gems: 0, gemsTotal: 0, freezes: 0 } as Stats);
 
     this.buildTextures();
@@ -125,7 +133,7 @@ export class GameScene extends Phaser.Scene {
 
     this.time.delayedCall(700, () => {
       const intro = this.prologue ? [...PROLOGUE, ...CHAPTER_INTRO[this.idx]!] : CHAPTER_INTRO[this.idx]!;
-      this.dialog.show(intro, () => this.say(`Chapter ${this.idx + 1}: ${this.lv.def.name}`, 3000));
+      this.dialog.show(intro, () => this.showCard(`CHAPTER ${this.idx + 1}`, this.lv.def.name));
     });
   }
 
@@ -341,17 +349,45 @@ export class GameScene extends Phaser.Scene {
 
   private buildHud(): void {
     this.bar = this.add.graphics().setScrollFactor(0).setDepth(60);
-    this.hud = this.add.text(W - 16, 14, '', { fontFamily: FONT_BODY, fontSize: '23px', color: '#dfe8ff', align: 'right' })
-      .setOrigin(1, 0).setScrollFactor(0).setDepth(60);
     this.add.text(16, 8, 'WARMTH', { fontFamily: FONT_BODY, fontSize: '20px', color: '#ffd27a' }).setScrollFactor(0).setDepth(60);
     this.add.text(16, 48, `${this.idx + 1}/3  ${this.lv.def.name}`, { fontFamily: FONT_BODY, fontSize: '19px', color: '#9db8ff' }).setScrollFactor(0).setDepth(60);
+    // Counters along the top right, each with its own little picture: sparks, lanterns, star shards.
+    this.hudIcons = []; this.hudTxt = [];
+    [[151, W - 330], [129, W - 215], [67, W - 100]].forEach(([frame, x]) => {
+      const ic = this.add.image(x!, 24, 'tiles', frame!).setScale(1.7).setScrollFactor(0).setDepth(60);
+      if (frame === 129) ic.setTint(0xffe9b0); // the lantern, glowing
+      this.hudIcons.push(ic);
+      this.hudTxt.push(this.add.text(x! + 22, 11, '', { fontFamily: FONT_BODY, fontSize: '26px', color: '#ffffff' }).setScrollFactor(0).setDepth(60));
+    });
+    // Pause button for mouse and touch (Esc or P also work).
+    const pb = this.add.rectangle(W - 28, 74, 36, 36, 0x0a1020, 0.6).setStrokeStyle(2, 0x7f8fc0).setScrollFactor(0).setDepth(60).setInteractive({ useHandCursor: true });
+    this.add.text(W - 28, 74, 'II', { fontFamily: FONT_TITLE, fontSize: '16px', color: '#dfe8ff' }).setOrigin(0.5).setScrollFactor(0).setDepth(61);
+    pb.on('pointerdown', () => this.openPause());
     this.toast = this.add.text(W / 2, 90, '', {
       fontFamily: FONT_BODY, fontSize: '26px', color: '#ffffff', align: 'center', backgroundColor: '#0a1020cc', padding: { x: 10, y: 6 },
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60).setAlpha(0);
+    // Chapter title card: big name that fades in, holds, and fades out.
+    const t1 = this.add.text(0, -28, '', { fontFamily: FONT_BODY, fontSize: '30px', color: '#ffd27a' }).setOrigin(0.5);
+    const t2 = this.add.text(0, 18, '', { fontFamily: FONT_TITLE, fontSize: '46px', color: '#ffffff' }).setOrigin(0.5);
+    this.card = this.add.container(W / 2, 200, [t1, t2]).setScrollFactor(0).setDepth(65).setAlpha(0);
+  }
+
+  private showCard(small: string, big: string): void {
+    (this.card.list[0] as Phaser.GameObjects.Text).setText(small);
+    (this.card.list[1] as Phaser.GameObjects.Text).setText(big);
+    this.tweens.killTweensOf(this.card);
+    this.card.setAlpha(0);
+    this.tweens.add({ targets: this.card, alpha: 1, duration: 600, hold: 1800, yoyo: true });
+  }
+
+  private openPause(): void {
+    if (this.finished || this.dialog.active || this.scene.isPaused()) return;
+    this.scene.pause();
+    this.scene.launch('Pause', { level: this.idx });
   }
 
   private buildInput(): void {
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,M') as typeof this.keys;
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,RIGHT,SPACE,Z,M,ESC,P') as typeof this.keys;
     if (!this.sys.game.device.input.touch) return;
     // On-screen buttons for phones and tablets: move on the left, jump on the right.
     const btn = (x: number, y: number, label: string, key: 'left' | 'right' | 'jump', w = 96) => {
@@ -379,6 +415,7 @@ export class GameScene extends Phaser.Scene {
 
   update(time: number, dt: number): void {
     if (Phaser.Input.Keyboard.JustDown(this.keys.M!)) this.sound.mute = !this.sound.mute; // M toggles all sound
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ESC!) || Phaser.Input.Keyboard.JustDown(this.keys.P!)) this.openPause();
     this.dialog.update(dt);
 
     if (this.dialog.active || this.finished) {
@@ -426,7 +463,7 @@ export class GameScene extends Phaser.Scene {
     if (this.buffer > 0 && this.coyote > 0) {
       body.setVelocityY(-470);
       this.buffer = 0; this.coyote = 0;
-      this.sound.play('phaseJump1', { volume: 0.28 });
+      this.sound.play('phaseJump1', { volume: 0.28, rate: 0.92 + Math.random() * 0.2 });
       this.dustE.emitParticleAt(this.hero.x, this.hero.y + 28, 4);
     }
     if (this.launched && (grounded || body.velocity.y > 0)) this.launched = false;
@@ -592,6 +629,10 @@ export class GameScene extends Phaser.Scene {
       }
       this.sparks--;
       l.lit = true;
+      this.add.particles(l.x, l.top - T, 'dot', {
+        lifespan: { min: 900, max: 1700 }, speedY: { min: -50, max: -20 }, speedX: { min: -10, max: 10 },
+        scale: { start: 2.4, end: 0 }, alpha: { start: 0.9, end: 0 }, tint: [0xffd27a, 0xff9a3c], blendMode: 'ADD', frequency: 260,
+      }).setDepth(DEPTH.fx); // a lit lantern keeps throwing little sparks
       this.spawn = { x: l.x, y: l.top - 40 };
       this.warmth = Math.min(WARMTH.max, this.warmth + 40);
       this.burstE.setParticleTint(0xffc46a);
@@ -671,6 +712,18 @@ export class GameScene extends Phaser.Scene {
     this.doorSprite.setTint(allLit ? 0xffe9b0 : 0xb4c3ee);
 
     this.windSnd?.setVolume(this.inWind ? 0.5 : 0.07);
+    // Music steps back while people talk, then returns.
+    const want = this.dialog.active ? 0.13 : 0.32;
+    this.musicVol += (want - this.musicVol) * Math.min(1, dt * 0.004);
+    (this.music as Phaser.Sound.WebAudioSound | undefined)?.setVolume?.(this.musicVol);
+    // The camera leans the way you run, so you can see further ahead.
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    this.lookAhead += (Phaser.Math.Clamp(body.velocity.x * 0.35, -60, 60) - this.lookAhead) * Math.min(1, dt * 0.004);
+    this.cameras.main.setFollowOffset(-this.lookAhead, 0);
+    // Low warmth: the frost pulses and a low note sounds once.
+    if (this.warmth < 25 && !this.lowWarned && !this.finished) { this.lowWarned = true; this.sound.play('lowDown', { volume: 0.2, rate: 0.7 }); this.say('Getting cold.\nFind a lit lantern.', 1800); }
+    if (this.warmth > 45) this.lowWarned = false;
+    if (this.warmth < 25) this.frost.setAlpha(this.frost.alpha * (0.85 + 0.15 * Math.sin(time * 0.008)));
 
     // Warmth bar: orange when warm, blue when cold.
     const g = this.bar;
@@ -679,7 +732,11 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(Phaser.Display.Color.GetColor(Math.round(110 + 145 * w), Math.round(120 + 80 * w), Math.round(255 - 150 * w)), 1)
       .fillRect(16, 28, 180 * w, 12);
     g.lineStyle(2, this.inWind ? 0x9db8ff : 0xffd27a, 0.9).strokeRect(14, 26, 184, 16);
-    this.hud.setText(`sparks ${this.sparks}\nlanterns ${this.lanterns.filter((l) => l.lit).length} / ${this.lanterns.length}\nshards ${this.gemsGot} / ${this.gemItems.length}`);
+    this.hudTxt[0]!.setText(`${this.sparks}`);
+    this.hudTxt[1]!.setText(`${this.lanterns.filter((l) => l.lit).length}/${this.lanterns.length}`);
+    this.hudTxt[2]!.setText(`${this.gemsGot}/${this.gemItems.length}`);
+    // The spark icon bobs when you are carrying one, as a reminder to go light a lantern.
+    this.hudIcons[0]!.setScale(this.sparks > 0 ? 1.7 + Math.sin(time * 0.012) * 0.25 : 1.7);
 
     for (const s of this.signText) {
       const near = Math.abs(this.hero.x - s.x) < 150 && Math.abs(this.hero.y - s.top) < 120;

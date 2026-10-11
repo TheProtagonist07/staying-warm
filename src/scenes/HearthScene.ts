@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { makeGlow, makeGrain, makeVignette, rng } from '../lib/atmosphere';
 import { Dialog } from '../lib/dialog';
 import { makeDot } from '../lib/scenery';
+import { writeSave } from '../lib/save';
 import { HEARTH_FINALE } from '../lib/story';
 import { FONT_BODY, FONT_TITLE } from '../lib/ui';
 
@@ -42,6 +43,7 @@ export class HearthScene extends Phaser.Scene {
   create(): void {
     this.fallers = []; this.caught = 0; this.stun = 0; this.spawnE = 0; this.spawnI = 1500; this.elapsed = 0;
     this.done = false; this.started = false; this.rand = rng(Date.now() & 0xffff);
+    writeSave({ chapter: 3 });
     makeDot(this); makeGlow(this, 'glow', 256); makeVignette(this, 'vignette', W, H); makeGrain(this, 'grain');
 
     // The chamber: a dark stone wall and floor, with the Hearth set into it.
@@ -202,6 +204,8 @@ export class HearthScene extends Phaser.Scene {
 
   private finish(): void {
     this.done = true;
+    const stats = this.registry.get('stats') as { time: number } | undefined;
+    if (stats) stats.time += this.elapsed;
     this.hint.setAlpha(0);
     for (const f of [...this.fallers]) this.remove(f);
     this.hero.play('hero-idle', true).setTint(0xffffff);
