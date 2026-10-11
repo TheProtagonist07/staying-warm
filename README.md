@@ -1,11 +1,22 @@
-# Mini Jam 221: Autumn
+# Staying Warm
 
-Jam: https://itch.io/jam/mini-jam-221-autumn (Oct 9 04:00 UTC to Oct 12).
+A short cold-night platformer made for Mini Jam 221 (limitation: "Staying Warm"). Carry sparks up a frozen mountain, light every lantern, and keep your warmth from running out.
 
-Stack: Phaser 3 + TypeScript + Vite. `npm run dev`, `npm run zip` (builds `game.zip` for itch HTML5 upload).
+Play: A/D or arrows to move, Space/W/Z to jump, M to mute, R to restart after winning. Touch controls appear on phones and tablets.
 
-Rules to respect: new work only, no AI-generated images/sound (art is drawn in code, audio is WebAudio in `src/lib/sfx.ts`), must follow the limitation announced at start.
+## How it plays
+- Your warmth drains all the time, and faster in cold-wind zones. Standing near a lit lantern refills it. At zero you freeze and wake at the last lantern.
+- Sparks (gold coins) light lanterns when you walk up to them. Light all 6 and the door at the summit opens.
+- Land on blue slugs to squash them. Red spikers and bats hurt: hop or wait.
+- Five optional star shards are hidden above the route.
 
-## Practice game (pre-jam rehearsal, not the submission)
+## Stack and layout
+Phaser 3 + TypeScript + Vite. `npm run dev` to play locally, `npm run zip` builds `game.zip` for an itch.io HTML5 upload.
 
-Collect all 6 light orbs, then reach the door. A/D or arrows to move, Space/W/Z to jump, C cycles the light colour, R restarts after winning. Level data and prop placement live in `src/level.ts`. Art is all drawn from code: lighting and scenery layers in `src/lib/atmosphere.ts`, the fox in `src/lib/hero.ts`, ground tiles, props, trees, moon, clouds and the distant forest in `src/lib/environment.ts` (sheets: `docs/assets.jpg`, `docs/assets-interactive.jpg`). Things that react to the fox (lanterns, grass, leaf piles, mushrooms, pumpkins, birds, fireflies) live in `src/lib/life.ts`; particle effects in `src/lib/fx.ts`. The rest of the cast (gloom, hedgehog, bat, spider, the mote companion, the owl) is drawn in `src/lib/characters.ts` and behaves per `src/lib/creatures.ts`; enemy placement is the `FOES` list in `src/level.ts` (sheet: `docs/cast.jpg`). The fox has 3 hearts: land on glooms to squash them, avoid everything else. The real jam entry gets designed after the limitation is announced.
+- `src/level.ts`: the whole level (platform segments, items, enemies, wind zones) and the warmth numbers.
+- `src/scenes/GameScene.ts`: gameplay. `src/scenes/BootScene.ts`: loading and title.
+- `src/lib/atmosphere.ts`, `src/lib/scenery.ts`: sky, glow, fog, grain, mountains, stars, moon, drawn by code.
+- `public/assets`: art and audio. `third_party/`: the original downloads with their licence files. Credits: `public/CREDITS.txt`.
+
+## Rules followed (Mini Jam 221)
+Art and sound are CC0 packs by Kenney and CC0 tracks from OpenGameArt (see credits). Docs in `docs/` are planning notes for a larger mobile version.
