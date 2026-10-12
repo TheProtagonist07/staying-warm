@@ -46,7 +46,7 @@ Made for Mini Jam 221 (Autumn, limitation "Staying Warm"), but I wasn't able to 
 - **Cover image:** `branding/cover_630x500.png`
 - **Icon / logo:** `branding/icon_512.png`, `branding/logo.png`
 - **Page background (Design > Background image):** `page/page_background_2560x1100.png`
-- **Banner (Design > Banner):** `page/banner_1920x420.png`
+- **Banner (Design > Banner):** `page/banner_1920x420.png` (the cast, no title text)
 - **Embed background (Edit game > Embed options):** `page/embed_cover_960x540.png`
 - **Screenshots, upload in this order:** `screenshots/01_orchard_lantern.png` to `08_the_end.png` (960 x 540)
 - **Promo clip:** `promo/staying-warm-clip.gif` (2 MB, for the page and Discord) and `.mp4` (for X, Reddit, Shorts)

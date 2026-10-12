@@ -45,17 +45,29 @@ bg=fit(strip,2560,1100,(0.5,0.5)).filter(ImageFilter.GaussianBlur(5)); bg=ImageE
 bg=bg.convert('RGBA'); bg=vignette(bg,0.4)
 bg.convert('RGB').save('marketing/page/page_background_2560x1100.png')
 
-# banner 1920x420 (title strip with logo)
-bn=fit(strip,1920,420,(0.5,0.75)).convert('RGBA'); bn=ImageEnhance.Brightness(bn).enhance(0.7)
-one=glow_text(130,'STAYING WARM'); paste_c(bn,one,960,190)
+# banner 1920x420: the cast on the road, no title text (the page already shows the name)
+def sprite(sheet,n,cols,fw):
+    im=Image.open(sheet).convert('RGBA'); x=(n%cols)*fw; y=(n//cols)*fw; return im.crop((x,y,x+fw,y+fw))
+chars=Image.open('public/assets/art/characters.png').convert('RGBA')
+bn=fit(strip,1920,420,(0.5,0.7)).convert('RGBA'); bn=ImageEnhance.Brightness(bn).enhance(0.65)
+gr=Image.new('RGBA',(1920,110),(14,16,36,255)); bn.alpha_composite(gr,(0,310))
+ImageDraw.Draw(bn).rectangle((0,306,1920,312),fill=(120,150,210,255))
+lant=sprite('public/assets/art/tiles.png',129,20,18).resize((18*9,18*9),Image.NEAREST)
+cast=[(sprite('public/assets/art/characters.png',0,9,24),360),(sprite('public/assets/art/characters.png',4,9,24),620),(None,880),(sprite('public/assets/art/characters.png',6,9,24),1060),(sprite('public/assets/art/characters.png',2,9,24),1320),(sprite('public/assets/art/characters.png',9,9,24),1580)]
+glow=Image.new('RGBA',(1920,420),(0,0,0,0)); gd=ImageDraw.Draw(glow)
+for cx in (880,):
+    gd.ellipse((cx-260,20,cx+260,420),fill=(255,170,70,120))
+glow=glow.filter(ImageFilter.GaussianBlur(70)); bn.alpha_composite(glow)
+for sp,cx in cast:
+    if sp is None: paste_c(bn,lant,cx,312-lant.height/2); continue
+    big=sp.resize((192,192),Image.NEAREST); paste_c(bn,big,cx,312-96)
 bn=vignette(bn,0.5); bn.convert('RGB').save('marketing/page/banner_1920x420.png')
 
-# embed cover 960x540 (launch screen behind the Run game button)
+# embed cover 960x540: logo near the top and tagline near the bottom; the Run game button sits in the middle
 em=load('k3_rise').convert('RGBA'); em=ImageEnhance.Brightness(em).enhance(0.6); em=vignette(em,0.5)
-lg=logo.copy(); lg.thumbnail((620,210),Image.LANCZOS); paste_c(em,lg,480,200)
-d=ImageDraw.Draw(em); f=font(24)
-for t,y,c in (('Light every lantern. Stay warm.',340,(220,230,255,255)),):
-    b=d.textbbox((0,0),t,font=f); d.text((480-(b[2]-b[0])/2,y),t,font=f,fill=c)
+one=glow_text(76,'STAYING WARM'); paste_c(em,one,480,110)
+d=ImageDraw.Draw(em); f=font(24); t='Light every lantern. Stay warm.'
+b=d.textbbox((0,0),t,font=f); d.text((480-(b[2]-b[0])/2,455),t,font=f,fill=(220,230,255,255))
 em.convert('RGB').save('marketing/page/embed_cover_960x540.png')
 
 # screenshots in order
