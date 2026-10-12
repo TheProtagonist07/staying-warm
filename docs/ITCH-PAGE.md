@@ -37,6 +37,8 @@ Made for Mini Jam 221 (Autumn, limitation "Staying Warm"), but I wasn't able to 
 The code was written with AI assistance. The art, music and sound effects are not AI-generated: they are CC0 packs, credited below.
 
 **Credits**
+- Programming: Shivam Chaurasia, with AI assistance
+- Design and direction: Shivam Chaurasia
 - Art: "Pixel Platformer" by Kenney (CC0), kenney.nl
 - Fonts: "Kenney Pixel" and "Kenney Pixel Square" by Kenney (CC0)
 - Music: "Snow Theme" by CleytonKauffman (CC0), opengameart.org
