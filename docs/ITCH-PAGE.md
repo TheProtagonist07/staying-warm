@@ -44,11 +44,14 @@ The code was written with AI assistance. The art, music and sound effects are no
 - Sound effects: "Digital Audio" and "Impact Sounds" by Kenney (CC0)
 - Made with Phaser 3. Lighting, fog, mountains and particles are drawn by the game's code.
 
-## Cover image
-Make it from a screenshot: the little explorer next to a freshly lit lantern, snow falling. Required size 630 x 500, minimum 315 x 250.
-
-## Screenshots
-Take four: the start, a cold-wind jump, a freshly lit lantern, the summit door.
+## Images (all in `marketing/`, made by `marketing/make_art.py` from in-game frames)
+- **Cover image:** `branding/cover_630x500.png`
+- **Icon / logo:** `branding/icon_512.png`, `branding/logo.png`
+- **Page background (Design > Background image):** `page/page_background_2560x1100.png`
+- **Banner (Design > Banner):** `page/banner_1920x420.png`
+- **Embed background (Edit game > Embed options):** `page/embed_cover_960x540.png`
+- **Screenshots, upload in this order:** `screenshots/01_orchard_lantern.png` to `08_the_end.png` (960 x 540)
+- **Promo clip:** `promo/staying-warm-clip.gif` (2 MB, for the page and Discord) and `.mp4` (for X, Reddit, Shorts)
 
 ## Notes for you (not for the page)
 Publish as a normal project (not a jam submission). If itch asks about generative AI use on the project settings, answer honestly: code AI-assisted, assets not AI-generated. Set Pricing to free / no payments, visibility Public when ready.
