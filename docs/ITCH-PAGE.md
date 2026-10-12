@@ -4,7 +4,7 @@
 
 **Short description (one line):** Carry sparks up a frozen mountain, light every lantern, and don't let your warmth run out.
 
-**Genre / tags:** Platformer, Pixel Art, Cozy, Atmospheric, Short, Singleplayer. Mini Jam 221, Autumn.
+**Genre / tags:** Platformer, Pixel Art, Cozy, Atmospheric, Short, Singleplayer. Autumn, Winter.
 
 **Kind of project:** HTML5. Upload `game.zip`, tick "This file will be played in the browser", viewport 960 x 540, enable fullscreen button, mobile friendly.
 
@@ -30,8 +30,8 @@ Emberfall is freezing. The Great Hearth at the top of Mount Hollow has gone out,
 - Your progress is saved in the browser: use Continue on the title screen.
 - Phones and tablets: on-screen buttons. Landscape works best.
 
-**For the jam**
-Limitation "Staying Warm": warmth is the whole game. It is a resource that drains, a reason to keep moving, and the thing you give to every lantern and every neighbour on the way up.
+**About this game**
+Made for Mini Jam 221 (Autumn, limitation "Staying Warm"), but I wasn't able to submit it in time, so it is released here as a regular free game. Warmth is the whole game: a resource that drains, a reason to keep moving, and the thing you give to every lantern and neighbour on the way up.
 
 **Credits**
 - Art: "Pixel Platformer" by Kenney (CC0), kenney.nl
@@ -48,5 +48,5 @@ Make it from a screenshot: the little explorer next to a freshly lit lantern, sn
 Take four: the start, a cold-wind jump, a freshly lit lantern, the summit door.
 
 ## Notes for you (not for the page)
-If the jam submission form asks how the game was made or whether AI was used, answer it accurately.
+Publish as a normal project (not a jam submission). If itch asks about generative AI use on the project settings, answer it accurately. Set Pricing to free / no payments, visibility Public when ready.
 
