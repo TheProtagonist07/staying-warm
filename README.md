@@ -1,6 +1,6 @@
 # Staying Warm
 
-![Phaser](https://img.shields.io/badge/Phaser-3-8a2be2) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-build-646cff?logo=vite&logoColor=white) ![Jam](https://img.shields.io/badge/Mini%20Jam-221-orange) ![License](https://img.shields.io/badge/license-MIT-green)
+![Phaser](https://img.shields.io/badge/Phaser-3-8a2be2) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-build-646cff?logo=vite&logoColor=white) ![Jam](https://img.shields.io/badge/Mini%20Jam-221-orange) [![Play on itch.io](https://img.shields.io/badge/Play-itch.io-fa5c5c?logo=itchdotio&logoColor=white)](https://the-protagonist07.itch.io/staying-warm) ![License](https://img.shields.io/badge/license-MIT-green)
 
 A short cold-night platformer made for Mini Jam 221 (limitation: "Staying Warm"). Carry sparks up a frozen mountain, light every lantern, and keep your warmth from running out.
 
@@ -10,7 +10,9 @@ A short cold-night platformer made for Mini Jam 221 (limitation: "Staying Warm")
   <img src="marketing/screenshots/06_relight_hearth.png" width="32%" alt="Relighting the hearth">
 </p>
 
-Play: A/D or arrows to move, Space/W/Z to jump, Esc or P to pause, M to mute. Touch controls appear on phones and tablets.
+**Play it free in your browser:** https://the-protagonist07.itch.io/staying-warm
+
+Controls: A/D or arrows to move, Space/W/Z to jump, Esc or P to pause, M to mute. Touch controls appear on phones and tablets.
 
 ## How it plays
 Three chapters plus a final stage (about 12 to 17 minutes with the story): The Orchard Path, The Cold Road, The Hearth Rise, and a short ember-catching mini game at the Great Hearth. A title page and prologue set it up, short scenes on the road add story, and an ending closes it.
