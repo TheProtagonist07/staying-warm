@@ -29,7 +29,7 @@ Phaser 3 + TypeScript + Vite. `npm run dev` to play locally, `npm run zip` build
 - `public/assets`: art and audio. `third_party/`: the original downloads with their licence files. Credits: `public/CREDITS.txt`.
 
 ## Rules followed (Mini Jam 221)
-Art and sound are CC0 packs by Kenney and CC0 tracks from OpenGameArt (see credits), not AI-generated. Code was written with AI assistance and the submission says so when asked. Docs in `docs/` are planning notes for a larger mobile version.
+Art and sound are CC0 packs by Kenney and CC0 tracks from OpenGameArt (see credits), not AI-generated. Docs in `docs/` are planning notes for a larger mobile version.
 
 ## License
 Original code and writing: [MIT](LICENSE) © 2026 Shivam Chaurasia. Bundled art and audio are CC0 and keep their own licences (see `public/CREDITS.txt` and `third_party/`).
