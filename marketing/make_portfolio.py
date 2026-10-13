@@ -1,8 +1,8 @@
 # Portfolio art for the_protagonist07's itch profile. Run from the repo root after make_art.py.
-import sys; sys.argv=['x']
+import os, sys; sys.argv=['x']
 exec(open('marketing/make_art.py').read().split('# logo')[0])   # reuse helpers (font, glow_text, vignette, fit, paste_c)
 from PIL import Image, ImageDraw, ImageFilter
-PH='/Users/theprotagonist/pixel-hopper/marketing/branding/cover_630x500.png'
+PH=os.environ.get('PIXEL_HOPPER_COVER','../pixel-hopper/marketing/branding/cover_630x500.png')  # path to the Pixel Hopper cover (sibling checkout by default)
 SW='marketing/branding/cover_630x500.png'
 
 # avatar 512: Wren with a lantern glow
