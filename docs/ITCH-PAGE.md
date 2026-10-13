@@ -34,7 +34,7 @@ Emberfall is freezing. The Great Hearth at the top of Mount Hollow has gone out,
 Made for Mini Jam 221 (Autumn, limitation "Staying Warm"), but I wasn't able to submit it in time, so it is released here as a regular free game. Warmth is the whole game: a resource that drains, a reason to keep moving, and the thing you give to every lantern and neighbour on the way up.
 
 **How it was made**
-The code was written with AI assistance. The art, music and sound effects are not AI-generated: they are CC0 packs, credited below.
+The art, music and sound effects are not AI-generated: they are CC0 packs, credited below.
 
 **Credits**
 - Programming: Shivam Chaurasia, with AI assistance
