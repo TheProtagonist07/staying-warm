@@ -1,6 +1,6 @@
 # Staying Warm
 
-![Phaser](https://img.shields.io/badge/Phaser-3-8a2be2) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-build-646cff?logo=vite&logoColor=white) ![Jam](https://img.shields.io/badge/Mini%20Jam-221-orange) ![License](https://img.shields.io/badge/license-All%20rights%20reserved-lightgrey)
+![Phaser](https://img.shields.io/badge/Phaser-3-8a2be2) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-build-646cff?logo=vite&logoColor=white) ![Jam](https://img.shields.io/badge/Mini%20Jam-221-orange) ![License](https://img.shields.io/badge/license-MIT-green)
 
 A short cold-night platformer made for Mini Jam 221 (limitation: "Staying Warm"). Carry sparks up a frozen mountain, light every lantern, and keep your warmth from running out.
 
@@ -32,4 +32,4 @@ Phaser 3 + TypeScript + Vite. `npm run dev` to play locally, `npm run zip` build
 Art and sound are CC0 packs by Kenney and CC0 tracks from OpenGameArt (see credits). Docs in `docs/` are planning notes for a larger mobile version.
 
 ## License
-Original code and writing: all rights reserved, see [LICENSE](LICENSE). Bundled art and audio are CC0 and keep their own licences (see `public/CREDITS.txt` and `third_party/`).
+Original code and writing: [MIT](LICENSE) © 2026 Shivam Chaurasia. Bundled art and audio are CC0 and keep their own licences (see `public/CREDITS.txt` and `third_party/`).
