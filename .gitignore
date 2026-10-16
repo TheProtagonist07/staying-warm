@@ -3,3 +3,5 @@ dist
 game.zip
 .claude
 marketing/raw/
+
+.DS_Store
