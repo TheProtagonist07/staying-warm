@@ -178,7 +178,10 @@ export class HearthScene extends Phaser.Scene {
         this.sound.play('lowDown', { volume: 0.35 });
         this.remove(f);
       } else if (f.y > FLOOR + 24) {
-        if (f.kind === 'ember') this.burstE.setParticleTint(0xffa040), this.burstE.emitParticleAt(f.x, FLOOR, 4);
+        if (f.kind === 'ember') {
+          this.burstE.setParticleTint(0xffa040);
+          this.burstE.emitParticleAt(f.x, FLOOR, 4);
+        }
         this.remove(f);
       }
     }

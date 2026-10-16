@@ -7,13 +7,23 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "zip": "npm run build && cd dist && rm -f ../game.zip && zip -qr ../game.zip ."
+    "zip": "npm run build && cd dist && rm -f ../game.zip && zip -qr ../game.zip .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "phaser": "^3.80.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
     "typescript": "^5.4.5",
+    "typescript-eslint": "^8.71.2",
     "vite": "^5.2.11"
   }
 }
