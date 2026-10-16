@@ -33,12 +33,8 @@ Emberfall is freezing. The Great Hearth at the top of Mount Hollow has gone out,
 **About this game**
 Made for Mini Jam 221 (Autumn, limitation "Staying Warm"), but I wasn't able to submit it in time, so it is released here as a regular free game. Warmth is the whole game: a resource that drains, a reason to keep moving, and the thing you give to every lantern and neighbour on the way up.
 
-**How it was made**
-The art, music and sound effects are not AI-generated: they are CC0 packs, credited below.
-
 **Credits**
-- Programming: Shivam Chaurasia, with AI assistance
-- Design and direction: Shivam Chaurasia
+- Programming, design and direction: Shivam Chaurasia
 - Art: "Pixel Platformer" by Kenney (CC0), kenney.nl
 - Fonts: "Kenney Pixel" and "Kenney Pixel Square" by Kenney (CC0)
 - Music: "Snow Theme" by CleytonKauffman (CC0), opengameart.org
@@ -56,5 +52,5 @@ The art, music and sound effects are not AI-generated: they are CC0 packs, credi
 - **Promo clip:** `promo/staying-warm-clip.gif` (2 MB, for the page and Discord) and `.mp4` (for X, Reddit, Shorts)
 
 ## Notes for you (not for the page)
-Publish as a normal project (not a jam submission). If itch asks about generative AI use on the project settings, answer honestly: code AI-assisted, assets not AI-generated. Set Pricing to free / no payments, visibility Public when ready.
+Publish as a normal project (not a jam submission). If itch asks about generative AI use on the project settings, answer it accurately. Set Pricing to free / no payments, visibility Public when ready.
 

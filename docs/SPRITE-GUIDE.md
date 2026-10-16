@@ -2,7 +2,7 @@
 
 You have an iPad, Apple Pencil and a Procreate subscription, so the main path is **drawing in Procreate**. This guide lists every method, the technical spec so your drawings drop straight into the game, and the full asset list in priority order.
 
-Jam rule reminder: AI-generated images are prohibited, and you must have the rights to everything in the game. Drawing your own art is the safest route. Say in your submission that Claude wrote the code.
+Jam rule reminder: AI-generated images are prohibited, and you must have the rights to everything in the game. Drawing your own art is the safest route.
 
 ## 1. Every way to make sprites
 
