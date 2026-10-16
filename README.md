@@ -30,8 +30,8 @@ Phaser 3 + TypeScript + Vite. `npm run dev` to play locally, `npm run zip` build
 - `src/lib/atmosphere.ts`, `src/lib/scenery.ts`: sky, glow, fog, grain, mountains, stars, moon, drawn by code.
 - `public/assets`: art and audio. `third_party/`: the original downloads with their licence files. Credits: `public/CREDITS.txt`.
 
-## Rules followed (Mini Jam 221)
-Art and sound are CC0 packs by Kenney and CC0 tracks from OpenGameArt (see credits). Docs in `docs/` are planning notes for a larger mobile version.
+## Credits
+Art, fonts, music and sound effects are CC0 packs by Kenney and CC0 tracks from OpenGameArt (see credits). Made for Mini Jam 221 (limitation "Staying Warm") but not submitted. Docs in `docs/` are planning notes for a larger mobile version.
 
 ## License
 Original code and writing: [MIT](LICENSE) © 2026 Shivam Chaurasia. Bundled art and audio are CC0 and keep their own licences (see `public/CREDITS.txt` and `third_party/`).
