@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { NAME_COLOR, PORTRAIT } from './story';
 import type { Line } from './story';
-import { FONT_BODY, FONT_TITLE } from './ui';
+import { FONT_BODY } from './ui';
 
 const W = 960, H = 540;
 
